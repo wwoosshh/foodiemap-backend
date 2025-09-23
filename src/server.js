@@ -48,7 +48,16 @@ app.get('/health', async (req, res) => {
   });
 });
 
-// API 라우트 (나중에 추가)
+// API 라우트
+const authRoutes = require('./routes/auth');
+const restaurantRoutes = require('./routes/restaurants');
+const categoryRoutes = require('./routes/categories');
+
+app.use('/api/auth', authRoutes);
+app.use('/api/restaurants', restaurantRoutes);
+app.use('/api/categories', categoryRoutes);
+
+// API 정보
 app.get('/api', (req, res) => {
   res.json({
     message: 'FoodieMap API v1.0',
@@ -56,7 +65,7 @@ app.get('/api', (req, res) => {
       health: '/health',
       auth: '/api/auth',
       restaurants: '/api/restaurants',
-      users: '/api/users'
+      categories: '/api/categories'
     }
   });
 });

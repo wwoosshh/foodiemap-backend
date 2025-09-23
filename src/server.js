@@ -7,6 +7,7 @@ const morgan = require('morgan');
 require('dotenv').config();
 
 const testSupabaseConnection = require('./utils/testConnection');
+const testCloudinaryConnection = require('./utils/testCloudinary');
 const app = express();
 
 // Render에서 자동으로 할당하는 포트 사용
@@ -33,14 +34,16 @@ app.use(express.urlencoded({ extended: true }));
 // Health check 엔드포인트 (Render 필수)
 app.get('/health', async (req, res) => {
   const supabaseConnected = await testSupabaseConnection();
+  const cloudinaryConnected = await testCloudinaryConnection();
 
   res.status(200).json({
     status: 'OK',
     message: 'FoodieMap API Server is running',
     timestamp: new Date().toISOString(),
     environment: process.env.NODE_ENV || 'development',
-    database: {
-      supabase: supabaseConnected ? 'Connected' : 'Disconnected'
+    services: {
+      supabase: supabaseConnected ? 'Connected' : 'Disconnected',
+      cloudinary: cloudinaryConnected ? 'Connected' : 'Disconnected'
     }
   });
 });
@@ -83,8 +86,9 @@ app.listen(PORT, '0.0.0.0', async () => {
   console.log(`📅 Started at: ${new Date().toISOString()}`);
   console.log(`🌍 Environment: ${process.env.NODE_ENV || 'development'}`);
 
-  // Supabase 연결 테스트
+  // 서비스 연결 테스트
   await testSupabaseConnection();
+  await testCloudinaryConnection();
 });
 
 module.exports = app;

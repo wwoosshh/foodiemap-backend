@@ -6,6 +6,7 @@ const rateLimit = require('express-rate-limit');
 const morgan = require('morgan');
 require('dotenv').config();
 
+const testSupabaseConnection = require('./utils/testConnection');
 const app = express();
 
 // Render에서 자동으로 할당하는 포트 사용
@@ -30,12 +31,17 @@ app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true }));
 
 // Health check 엔드포인트 (Render 필수)
-app.get('/health', (req, res) => {
+app.get('/health', async (req, res) => {
+  const supabaseConnected = await testSupabaseConnection();
+
   res.status(200).json({
     status: 'OK',
     message: 'FoodieMap API Server is running',
     timestamp: new Date().toISOString(),
-    environment: process.env.NODE_ENV || 'development'
+    environment: process.env.NODE_ENV || 'development',
+    database: {
+      supabase: supabaseConnected ? 'Connected' : 'Disconnected'
+    }
   });
 });
 
@@ -72,10 +78,13 @@ app.use((err, req, res, next) => {
 });
 
 // 서버 시작
-app.listen(PORT, '0.0.0.0', () => {
+app.listen(PORT, '0.0.0.0', async () => {
   console.log(`🚀 FoodieMap API Server running on port ${PORT}`);
   console.log(`📅 Started at: ${new Date().toISOString()}`);
   console.log(`🌍 Environment: ${process.env.NODE_ENV || 'development'}`);
+
+  // Supabase 연결 테스트
+  await testSupabaseConnection();
 });
 
 module.exports = app;

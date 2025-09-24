@@ -40,7 +40,11 @@ router.post('/login', [
 
     // 관리자 찾기
     console.log('👤 관리자 계정 검색 중...');
+    console.log('Admin 모델 확인:', typeof Admin);
+    console.log('Admin.findByEmail 함수:', typeof Admin.findByEmail);
+
     const admin = await Admin.findByEmail(email);
+    console.log('DB 검색 결과:', admin ? 'found' : 'not found');
 
     if (!admin) {
       console.log('❌ 관리자 계정을 찾을 수 없음:', email);
@@ -93,10 +97,19 @@ router.post('/login', [
     });
 
   } catch (error) {
-    console.error('관리자 로그인 오류:', error);
+    console.error('❌ 관리자 로그인 오류 발생:');
+    console.error('Error name:', error.name);
+    console.error('Error message:', error.message);
+    console.error('Error stack:', error.stack);
+    console.error('Full error:', error);
+
     res.status(500).json({
       success: false,
-      message: '서버 오류가 발생했습니다.'
+      message: '서버 오류가 발생했습니다.',
+      ...(process.env.NODE_ENV !== 'production' && {
+        error: error.message,
+        stack: error.stack
+      })
     });
   }
 });

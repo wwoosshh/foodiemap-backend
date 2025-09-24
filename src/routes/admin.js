@@ -43,8 +43,23 @@ router.post('/login', [
     console.log('Admin 모델 확인:', typeof Admin);
     console.log('Admin.findByEmail 함수:', typeof Admin.findByEmail);
 
-    const admin = await Admin.findByEmail(email);
-    console.log('DB 검색 결과:', admin ? 'found' : 'not found');
+    let admin;
+    try {
+      admin = await Admin.findByEmail(email);
+      console.log('DB 검색 결과:', admin ? 'found' : 'not found');
+      if (admin) {
+        console.log('찾은 관리자 정보:', {
+          id: admin.id,
+          email: admin.email,
+          role: admin.role,
+          is_active: admin.is_active,
+          permissions_raw: admin.permissions
+        });
+      }
+    } catch (error) {
+      console.error('❌ Admin.findByEmail 오류:', error);
+      throw new Error(`Admin.findByEmail failed: ${error.message}`);
+    }
 
     if (!admin) {
       console.log('❌ 관리자 계정을 찾을 수 없음:', email);
@@ -54,16 +69,16 @@ router.post('/login', [
       });
     }
 
-    console.log('✅ 관리자 계정 발견:', {
-      id: admin.id,
-      email: admin.email,
-      role: admin.role,
-      is_active: admin.is_active
-    });
-
     // 비밀번호 확인
     console.log('🔑 비밀번호 검증 중...');
-    const isPasswordValid = await Admin.verifyPassword(password, admin.password);
+    let isPasswordValid;
+    try {
+      isPasswordValid = await Admin.verifyPassword(password, admin.password);
+      console.log('비밀번호 검증 결과:', isPasswordValid);
+    } catch (error) {
+      console.error('❌ Admin.verifyPassword 오류:', error);
+      throw new Error(`Password verification failed: ${error.message}`);
+    }
 
     if (!isPasswordValid) {
       console.log('❌ 비밀번호 불일치');
@@ -76,10 +91,34 @@ router.post('/login', [
     console.log('✅ 비밀번호 검증 성공');
 
     // 마지막 로그인 시간 업데이트
-    await Admin.updateLastLogin(admin.id);
+    try {
+      await Admin.updateLastLogin(admin.id);
+      console.log('✅ 마지막 로그인 시간 업데이트 완료');
+    } catch (error) {
+      console.error('⚠️ 마지막 로그인 시간 업데이트 실패:', error);
+      // 로그인은 계속 진행
+    }
 
     // JWT 토큰 생성
-    const token = generateAdminToken(admin.id);
+    let token;
+    try {
+      token = generateAdminToken(admin.id);
+      console.log('✅ JWT 토큰 생성 완료');
+    } catch (error) {
+      console.error('❌ JWT 토큰 생성 오류:', error);
+      throw new Error(`Token generation failed: ${error.message}`);
+    }
+
+    // permissions 파싱 시도
+    let permissions;
+    try {
+      permissions = JSON.parse(admin.permissions || '[]');
+      console.log('✅ permissions 파싱 성공:', permissions);
+    } catch (error) {
+      console.error('❌ permissions JSON 파싱 오류:', error);
+      console.error('Raw permissions value:', admin.permissions);
+      permissions = []; // 기본값으로 빈 배열 사용
+    }
 
     res.json({
       success: true,
@@ -90,7 +129,7 @@ router.post('/login', [
           email: admin.email,
           name: admin.name,
           role: admin.role,
-          permissions: JSON.parse(admin.permissions || '[]')
+          permissions
         },
         token
       }

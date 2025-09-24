@@ -23,8 +23,11 @@ router.post('/login', [
   body('password').notEmpty()
 ], async (req, res) => {
   try {
+    console.log('🔐 관리자 로그인 시도:', req.body.email);
+
     const errors = validationResult(req);
     if (!errors.isEmpty()) {
+      console.log('❌ 입력 검증 실패:', errors.array());
       return res.status(400).json({
         success: false,
         message: '입력 정보가 올바르지 않습니다.',
@@ -33,24 +36,40 @@ router.post('/login', [
     }
 
     const { email, password } = req.body;
+    console.log('✅ 입력 검증 통과, 이메일:', email);
 
     // 관리자 찾기
+    console.log('👤 관리자 계정 검색 중...');
     const admin = await Admin.findByEmail(email);
+
     if (!admin) {
+      console.log('❌ 관리자 계정을 찾을 수 없음:', email);
       return res.status(401).json({
         success: false,
         message: '이메일 또는 비밀번호가 올바르지 않습니다.'
       });
     }
 
+    console.log('✅ 관리자 계정 발견:', {
+      id: admin.id,
+      email: admin.email,
+      role: admin.role,
+      is_active: admin.is_active
+    });
+
     // 비밀번호 확인
+    console.log('🔑 비밀번호 검증 중...');
     const isPasswordValid = await Admin.verifyPassword(password, admin.password);
+
     if (!isPasswordValid) {
+      console.log('❌ 비밀번호 불일치');
       return res.status(401).json({
         success: false,
         message: '이메일 또는 비밀번호가 올바르지 않습니다.'
       });
     }
+
+    console.log('✅ 비밀번호 검증 성공');
 
     // 마지막 로그인 시간 업데이트
     await Admin.updateLastLogin(admin.id);

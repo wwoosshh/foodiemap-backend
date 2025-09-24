@@ -4,6 +4,7 @@ const jwt = require('jsonwebtoken');
 const { body, validationResult } = require('express-validator');
 const Admin = require('../models/Admin');
 const User = require('../models/User');
+const supabase = require('../config/supabase');
 const { adminAuth, requirePermission, requireSuperAdmin } = require('../middleware/adminAuth');
 
 const router = express.Router();

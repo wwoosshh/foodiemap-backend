@@ -3,7 +3,7 @@ const bcrypt = require('bcryptjs');
 
 class User {
   static async create(userData) {
-    const { email, password, name, phone } = userData;
+    const { email, password, name, phone, avatar_url } = userData;
 
     // 비밀번호 해시화
     const hashedPassword = await bcrypt.hash(password, 10);
@@ -14,8 +14,12 @@ class User {
         email,
         password: hashedPassword,
         name,
-        phone,
-        created_at: new Date().toISOString()
+        phone: phone || null,
+        avatar_url: avatar_url || null,
+        email_verified: false,
+        email_verified_at: null,
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString()
       }])
       .select()
       .single();

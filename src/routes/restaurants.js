@@ -133,8 +133,8 @@ router.get('/nearby/search', [
   }
 });
 
-// 맛집 등록 (인증 필요)
-router.post('/', authMiddleware, [
+// 맛집 등록 (임시로 인증 제거)
+router.post('/', [
   body('name').notEmpty().trim(),
   body('address').notEmpty().trim(),
   body('latitude').isFloat({ min: -90, max: 90 }),

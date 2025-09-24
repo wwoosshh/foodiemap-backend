@@ -52,10 +52,14 @@ app.get('/health', async (req, res) => {
 const authRoutes = require('./routes/auth');
 const restaurantRoutes = require('./routes/restaurants');
 const categoryRoutes = require('./routes/categories');
+const verificationRoutes = require('./routes/verification');
+const adminRoutes = require('./routes/admin');
 
 app.use('/api/auth', authRoutes);
 app.use('/api/restaurants', restaurantRoutes);
 app.use('/api/categories', categoryRoutes);
+app.use('/api/verification', verificationRoutes);
+app.use('/api/admin', adminRoutes);
 
 // API 정보
 app.get('/api', (req, res) => {
@@ -65,7 +69,9 @@ app.get('/api', (req, res) => {
       health: '/health',
       auth: '/api/auth',
       restaurants: '/api/restaurants',
-      categories: '/api/categories'
+      categories: '/api/categories',
+      verification: '/api/verification',
+      admin: '/api/admin'
     }
   });
 });

@@ -354,27 +354,105 @@ router.get('/restaurants', adminAuth, requirePermission('manage_restaurants'), a
 // 시스템 통계
 router.get('/stats', adminAuth, async (req, res) => {
   try {
-    const [usersResult, restaurantsResult, reviewsResult] = await Promise.all([
-      supabase.from('users').select('*', { count: 'exact', head: true }),
-      supabase.from('restaurants').select('*', { count: 'exact', head: true }),
-      supabase.from('reviews').select('*', { count: 'exact', head: true })
+    console.log('📊 시스템 통계 조회 시작');
+
+    // 기본 통계 쿼리들
+    const [
+      usersResult,
+      restaurantsResult,
+      reviewsResult,
+      categoriesResult
+    ] = await Promise.all([
+      // 전체 사용자 + 최근 7일 가입자
+      supabase
+        .from('users')
+        .select('id, created_at, email_verified', { count: 'exact' }),
+
+      // 전체 맛집 + 카테고리별 분포
+      supabase
+        .from('restaurants')
+        .select(`
+          id,
+          created_at,
+          categories:category_id(name)
+        `, { count: 'exact' }),
+
+      // 전체 리뷰 + 평균 평점
+      supabase
+        .from('reviews')
+        .select('id, rating, created_at', { count: 'exact' }),
+
+      // 카테고리 목록
+      supabase
+        .from('categories')
+        .select('id, name')
     ]);
+
+    if (usersResult.error) throw usersResult.error;
+    if (restaurantsResult.error) throw restaurantsResult.error;
+    if (reviewsResult.error) throw reviewsResult.error;
+    if (categoriesResult.error) throw categoriesResult.error;
+
+    // 사용자 통계 계산
+    const users = usersResult.data || [];
+    const now = new Date();
+    const sevenDaysAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+
+    const userStats = {
+      total: usersResult.count || 0,
+      verified: users.filter(u => u.email_verified).length,
+      recent: users.filter(u => new Date(u.created_at) > sevenDaysAgo).length
+    };
+
+    // 맛집 통계 계산
+    const restaurants = restaurantsResult.data || [];
+    const restaurantStats = {
+      total: restaurantsResult.count || 0,
+      recent: restaurants.filter(r => new Date(r.created_at) > sevenDaysAgo).length,
+      by_category: {}
+    };
+
+    // 카테고리별 맛집 분포 계산
+    const categories = categoriesResult.data || [];
+    categories.forEach(category => {
+      restaurantStats.by_category[category.name] = restaurants.filter(
+        r => r.categories?.name === category.name
+      ).length;
+    });
+
+    // 리뷰 통계 계산
+    const reviews = reviewsResult.data || [];
+    const totalRating = reviews.reduce((sum, r) => sum + (r.rating || 0), 0);
+    const reviewStats = {
+      total: reviewsResult.count || 0,
+      average_rating: reviews.length > 0 ? totalRating / reviews.length : 0,
+      recent: reviews.filter(r => new Date(r.created_at) > sevenDaysAgo).length
+    };
+
+    const statsData = {
+      users: userStats,
+      restaurants: restaurantStats,
+      reviews: reviewStats,
+      timestamp: now.toISOString()
+    };
+
+    console.log('✅ 시스템 통계 조회 완료:', {
+      users: userStats.total,
+      restaurants: restaurantStats.total,
+      reviews: reviewStats.total
+    });
 
     res.json({
       success: true,
-      data: {
-        users: usersResult.count || 0,
-        restaurants: restaurantsResult.count || 0,
-        reviews: reviewsResult.count || 0,
-        timestamp: new Date().toISOString()
-      }
+      data: statsData
     });
 
   } catch (error) {
-    console.error('시스템 통계 조회 오류:', error);
+    console.error('❌ 시스템 통계 조회 오류:', error);
     res.status(500).json({
       success: false,
-      message: '서버 오류가 발생했습니다.'
+      message: '시스템 통계를 불러오는 중 오류가 발생했습니다.',
+      ...(process.env.NODE_ENV !== 'production' && { error: error.message })
     });
   }
 });

@@ -1,6 +1,6 @@
 const express = require('express');
 const { supabase } = require('../config/supabase');
-const auth = require('../middleware/auth');
+const { adminAuth } = require('../middleware/adminAuth');
 
 const router = express.Router();
 
@@ -35,7 +35,7 @@ router.get('/', async (req, res) => {
 });
 
 // 관리자용 모든 배너 목록 조회 (관리자 권한 필요)
-router.get('/admin', auth.verifyAdminAuth, async (req, res) => {
+router.get('/admin', adminAuth, async (req, res) => {
   try {
     const { page = 1, limit = 10, search = '' } = req.query;
     const offset = (page - 1) * limit;
@@ -87,7 +87,7 @@ router.get('/admin', auth.verifyAdminAuth, async (req, res) => {
 });
 
 // 배너 상세 조회 (관리자 권한 필요)
-router.get('/admin/:id', auth.verifyAdminAuth, async (req, res) => {
+router.get('/admin/:id', adminAuth, async (req, res) => {
   try {
     const { id } = req.params;
 
@@ -124,7 +124,7 @@ router.get('/admin/:id', auth.verifyAdminAuth, async (req, res) => {
 });
 
 // 배너 생성 (관리자 권한 필요)
-router.post('/admin', auth.verifyAdminAuth, async (req, res) => {
+router.post('/admin', adminAuth, async (req, res) => {
   try {
     const { title, description, image_url, link_url, is_active = true, sort_order = 0 } = req.body;
 
@@ -172,7 +172,7 @@ router.post('/admin', auth.verifyAdminAuth, async (req, res) => {
 });
 
 // 배너 수정 (관리자 권한 필요)
-router.put('/admin/:id', auth.verifyAdminAuth, async (req, res) => {
+router.put('/admin/:id', adminAuth, async (req, res) => {
   try {
     const { id } = req.params;
     const { title, description, image_url, link_url, is_active, sort_order } = req.body;
@@ -234,7 +234,7 @@ router.put('/admin/:id', auth.verifyAdminAuth, async (req, res) => {
 });
 
 // 배너 삭제 (관리자 권한 필요)
-router.delete('/admin/:id', auth.verifyAdminAuth, async (req, res) => {
+router.delete('/admin/:id', adminAuth, async (req, res) => {
   try {
     const { id } = req.params;
 
@@ -280,7 +280,7 @@ router.delete('/admin/:id', auth.verifyAdminAuth, async (req, res) => {
 });
 
 // 배너 순서 업데이트 (관리자 권한 필요)
-router.patch('/admin/reorder', auth.verifyAdminAuth, async (req, res) => {
+router.patch('/admin/reorder', adminAuth, async (req, res) => {
   try {
     const { banners } = req.body;
 

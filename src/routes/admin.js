@@ -9,12 +9,32 @@ const { adminAuth, requirePermission, requireSuperAdmin } = require('../middlewa
 
 const router = express.Router();
 
+// 메모리 기반 2차 인증 저장소
+const authCodes = new Map(); // { email: { code, expiresAt, adminData } }
+
 // JWT 토큰 생성 (관리자용)
 const generateAdminToken = (adminId) => {
   const jwtSecret = process.env.JWT_SECRET || 'fallback-secret-key-for-development-only';
   return jwt.sign({ adminId }, jwtSecret, {
     expiresIn: process.env.JWT_EXPIRES_IN || '24h' // 관리자는 24시간
   });
+};
+
+// 6자리 보안 인증코드 생성 (나노초 기반)
+const generateAuthCode = () => {
+  // 현재 시간의 나노초를 솔트로 사용
+  const now = process.hrtime.bigint(); // 나노초 정밀도
+  const salt = now.toString();
+
+  // 솔트와 랜덤 값을 결합하여 해시 생성
+  const crypto = require('crypto');
+  const combined = salt + Math.random().toString() + Date.now().toString();
+  const hash = crypto.createHash('sha256').update(combined).digest('hex');
+
+  // 해시에서 6자리 숫자 추출
+  const code = parseInt(hash.substring(0, 8), 16) % 900000 + 100000;
+
+  return code.toString();
 };
 
 // 관리자 로그인
@@ -90,48 +110,49 @@ router.post('/login', [
 
     console.log('✅ 비밀번호 검증 성공');
 
-    // 마지막 로그인 시간 업데이트
-    try {
-      await Admin.updateLastLogin(admin.id);
-      console.log('✅ 마지막 로그인 시간 업데이트 완료');
-    } catch (error) {
-      console.error('⚠️ 마지막 로그인 시간 업데이트 실패:', error);
-      // 로그인은 계속 진행
-    }
+    // 2차 인증 코드 생성
+    const authCode = generateAuthCode();
+    const expiresAt = new Date(Date.now() + 5 * 60 * 1000); // 5분 후 만료
 
-    // JWT 토큰 생성
-    let token;
-    try {
-      token = generateAdminToken(admin.id);
-      console.log('✅ JWT 토큰 생성 완료');
-    } catch (error) {
-      console.error('❌ JWT 토큰 생성 오류:', error);
-      throw new Error(`Token generation failed: ${error.message}`);
-    }
-
-    // permissions 파싱 시도
+    // permissions 파싱
     let permissions;
     try {
       permissions = JSON.parse(admin.permissions || '[]');
-      console.log('✅ permissions 파싱 성공:', permissions);
     } catch (error) {
       console.error('❌ permissions JSON 파싱 오류:', error);
-      console.error('Raw permissions value:', admin.permissions);
-      permissions = []; // 기본값으로 빈 배열 사용
+      permissions = [];
     }
+
+    // 메모리에 인증 코드 저장
+    authCodes.set(email, {
+      code: authCode,
+      expiresAt,
+      adminData: {
+        id: admin.id,
+        email: admin.email,
+        name: admin.name,
+        role: admin.role,
+        permissions
+      }
+    });
+
+    // 🔐 서버 로그에 인증 코드 출력 (Render 로그창에서 확인 가능)
+    console.log('');
+    console.log('🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨');
+    console.log('🔐 ADMIN 2차 인증 코드가 생성되었습니다 🔐');
+    console.log('👤 관리자:', admin.name, `(${admin.email})`);
+    console.log('🔢 인증 코드:', authCode);
+    console.log('⏰ 만료 시간:', expiresAt.toISOString());
+    console.log('🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨');
+    console.log('');
 
     res.json({
       success: true,
-      message: '관리자 로그인이 완료되었습니다.',
+      message: '2차 인증 코드가 서버 로그에 출력되었습니다. Render 로그창을 확인하세요.',
+      requiresVerification: true,
       data: {
-        admin: {
-          id: admin.id,
-          email: admin.email,
-          name: admin.name,
-          role: admin.role,
-          permissions
-        },
-        token
+        email: admin.email,
+        name: admin.name
       }
     });
 
@@ -149,6 +170,88 @@ router.post('/login', [
         error: error.message,
         stack: error.stack
       })
+    });
+  }
+});
+
+// 2차 인증 코드 검증
+router.post('/verify-auth', [
+  body('email').isEmail().normalizeEmail(),
+  body('code').isLength({ min: 6, max: 6 }).isNumeric()
+], async (req, res) => {
+  try {
+    console.log('🔐 관리자 2차 인증 검증 시도:', req.body.email);
+
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) {
+      return res.status(400).json({
+        success: false,
+        message: '입력 정보가 올바르지 않습니다.',
+        errors: errors.array()
+      });
+    }
+
+    const { email, code } = req.body;
+
+    // 저장된 인증 코드 확인
+    const authData = authCodes.get(email);
+    if (!authData) {
+      console.log('❌ 인증 코드를 찾을 수 없음:', email);
+      return res.status(401).json({
+        success: false,
+        message: '인증 코드가 존재하지 않습니다. 다시 로그인해 주세요.'
+      });
+    }
+
+    // 만료 시간 확인
+    if (new Date() > authData.expiresAt) {
+      authCodes.delete(email);
+      console.log('❌ 인증 코드가 만료됨:', email);
+      return res.status(401).json({
+        success: false,
+        message: '인증 코드가 만료되었습니다. 다시 로그인해 주세요.'
+      });
+    }
+
+    // 코드 검증
+    if (authData.code !== code) {
+      console.log('❌ 잘못된 인증 코드:', { expected: authData.code, received: code });
+      return res.status(401).json({
+        success: false,
+        message: '잘못된 인증 코드입니다.'
+      });
+    }
+
+    // 인증 성공 - 토큰 생성
+    const token = generateAdminToken(authData.adminData.id);
+
+    // 마지막 로그인 시간 업데이트
+    try {
+      await Admin.updateLastLogin(authData.adminData.id);
+      console.log('✅ 마지막 로그인 시간 업데이트 완료');
+    } catch (error) {
+      console.error('⚠️ 마지막 로그인 시간 업데이트 실패:', error);
+    }
+
+    // 사용된 코드 삭제
+    authCodes.delete(email);
+
+    console.log('✅ 관리자 2차 인증 성공:', authData.adminData.email);
+
+    res.json({
+      success: true,
+      message: '관리자 로그인이 완료되었습니다.',
+      data: {
+        admin: authData.adminData,
+        token
+      }
+    });
+
+  } catch (error) {
+    console.error('❌ 2차 인증 검증 오류:', error);
+    res.status(500).json({
+      success: false,
+      message: '서버 오류가 발생했습니다.'
     });
   }
 });

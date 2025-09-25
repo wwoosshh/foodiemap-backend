@@ -259,12 +259,12 @@ router.post('/verify-auth', [
 // 사용자 목록 조회
 router.get('/users', adminAuth, requirePermission('manage_users'), async (req, res) => {
   try {
-    const { page = 1, limit = 20, search = '' } = req.query;
+    const { page = 1, limit = 20, search = '', role = '', email_verified = '' } = req.query;
     const offset = (page - 1) * limit;
 
     let query = supabase
       .from('users')
-      .select('id, email, name, phone, email_verified, created_at', { count: 'exact' })
+      .select('id, email, name, phone, email_verified, created_at, role, permissions', { count: 'exact' })
       .order('created_at', { ascending: false })
       .range(offset, offset + limit - 1);
 
@@ -272,14 +272,29 @@ router.get('/users', adminAuth, requirePermission('manage_users'), async (req, r
       query = query.or(`name.ilike.%${search}%,email.ilike.%${search}%`);
     }
 
+    if (role) {
+      query = query.eq('role', role);
+    }
+
+    if (email_verified !== '') {
+      query = query.eq('email_verified', email_verified === 'true');
+    }
+
     const { data, error, count } = await query;
 
     if (error) throw error;
 
+    // 사용자 데이터 정규화 - role과 permissions가 없는 경우 기본값 설정
+    const normalizedUsers = data.map(user => ({
+      ...user,
+      role: user.role || 'user',
+      permissions: user.permissions ? (Array.isArray(user.permissions) ? user.permissions : JSON.parse(user.permissions || '[]')) : []
+    }));
+
     res.json({
       success: true,
       data: {
-        users: data,
+        users: normalizedUsers,
         pagination: {
           page: parseInt(page),
           limit: parseInt(limit),
@@ -291,6 +306,250 @@ router.get('/users', adminAuth, requirePermission('manage_users'), async (req, r
 
   } catch (error) {
     console.error('사용자 목록 조회 오류:', error);
+    res.status(500).json({
+      success: false,
+      message: '서버 오류가 발생했습니다.'
+    });
+  }
+});
+
+// 사용자 상세 조회
+router.get('/users/:id', adminAuth, requirePermission('manage_users'), async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    const { data, error } = await supabase
+      .from('users')
+      .select('*')
+      .eq('id', id)
+      .single();
+
+    if (error) throw error;
+
+    if (!data) {
+      return res.status(404).json({
+        success: false,
+        message: '사용자를 찾을 수 없습니다.'
+      });
+    }
+
+    // 데이터 정규화
+    const normalizedUser = {
+      ...data,
+      role: data.role || 'user',
+      permissions: data.permissions ? (Array.isArray(data.permissions) ? data.permissions : JSON.parse(data.permissions || '[]')) : []
+    };
+
+    res.json({
+      success: true,
+      data: normalizedUser
+    });
+
+  } catch (error) {
+    console.error('사용자 상세 조회 오류:', error);
+    res.status(500).json({
+      success: false,
+      message: '서버 오류가 발생했습니다.'
+    });
+  }
+});
+
+// 사용자 생성
+router.post('/users', adminAuth, requirePermission('manage_users'), [
+  body('email').isEmail().normalizeEmail(),
+  body('password').isLength({ min: 6 }),
+  body('name').notEmpty().trim(),
+  body('role').optional().isIn(['user', 'admin', 'super_admin'])
+], async (req, res) => {
+  try {
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) {
+      return res.status(400).json({
+        success: false,
+        message: '입력 정보가 올바르지 않습니다.',
+        errors: errors.array()
+      });
+    }
+
+    const { email, password, name, phone, role = 'user', permissions = [] } = req.body;
+
+    // 이메일 중복 체크
+    const { data: existingUser } = await supabase
+      .from('users')
+      .select('id')
+      .eq('email', email)
+      .single();
+
+    if (existingUser) {
+      return res.status(409).json({
+        success: false,
+        message: '이미 등록된 이메일입니다.'
+      });
+    }
+
+    // 비밀번호 해시화
+    const hashedPassword = await bcrypt.hash(password, 12);
+
+    // 사용자 생성
+    const { data: newUser, error } = await supabase
+      .from('users')
+      .insert({
+        email,
+        password: hashedPassword,
+        name,
+        phone,
+        role,
+        permissions: JSON.stringify(permissions),
+        email_verified: false
+      })
+      .select()
+      .single();
+
+    if (error) throw error;
+
+    // 비밀번호 필드 제거
+    const { password: _, ...userData } = newUser;
+
+    res.status(201).json({
+      success: true,
+      message: '사용자가 성공적으로 생성되었습니다.',
+      data: {
+        ...userData,
+        permissions: Array.isArray(permissions) ? permissions : []
+      }
+    });
+
+  } catch (error) {
+    console.error('사용자 생성 오류:', error);
+    res.status(500).json({
+      success: false,
+      message: '서버 오류가 발생했습니다.'
+    });
+  }
+});
+
+// 사용자 수정
+router.put('/users/:id', adminAuth, requirePermission('manage_users'), [
+  body('email').optional().isEmail().normalizeEmail(),
+  body('name').optional().notEmpty().trim(),
+  body('role').optional().isIn(['user', 'admin', 'super_admin'])
+], async (req, res) => {
+  try {
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) {
+      return res.status(400).json({
+        success: false,
+        message: '입력 정보가 올바르지 않습니다.',
+        errors: errors.array()
+      });
+    }
+
+    const { id } = req.params;
+    const { email, name, phone, role, permissions } = req.body;
+
+    // 사용자 존재 확인
+    const { data: existingUser, error: findError } = await supabase
+      .from('users')
+      .select('id, email')
+      .eq('id', id)
+      .single();
+
+    if (findError || !existingUser) {
+      return res.status(404).json({
+        success: false,
+        message: '사용자를 찾을 수 없습니다.'
+      });
+    }
+
+    // 이메일 변경 시 중복 체크
+    if (email && email !== existingUser.email) {
+      const { data: emailExists } = await supabase
+        .from('users')
+        .select('id')
+        .eq('email', email)
+        .single();
+
+      if (emailExists) {
+        return res.status(409).json({
+          success: false,
+          message: '이미 사용 중인 이메일입니다.'
+        });
+      }
+    }
+
+    // 업데이트할 데이터 준비
+    const updateData = {};
+    if (email) updateData.email = email;
+    if (name) updateData.name = name;
+    if (phone !== undefined) updateData.phone = phone;
+    if (role) updateData.role = role;
+    if (permissions !== undefined) updateData.permissions = JSON.stringify(permissions);
+
+    // 사용자 정보 업데이트
+    const { data: updatedUser, error: updateError } = await supabase
+      .from('users')
+      .update(updateData)
+      .eq('id', id)
+      .select()
+      .single();
+
+    if (updateError) throw updateError;
+
+    // 비밀번호 필드 제거 및 데이터 정규화
+    const { password: _, ...userData } = updatedUser;
+
+    res.json({
+      success: true,
+      message: '사용자 정보가 성공적으로 수정되었습니다.',
+      data: {
+        ...userData,
+        permissions: userData.permissions ? JSON.parse(userData.permissions) : []
+      }
+    });
+
+  } catch (error) {
+    console.error('사용자 수정 오류:', error);
+    res.status(500).json({
+      success: false,
+      message: '서버 오류가 발생했습니다.'
+    });
+  }
+});
+
+// 사용자 삭제
+router.delete('/users/:id', adminAuth, requirePermission('manage_users'), async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    // 사용자 존재 확인
+    const { data: existingUser, error: findError } = await supabase
+      .from('users')
+      .select('id, name, email')
+      .eq('id', id)
+      .single();
+
+    if (findError || !existingUser) {
+      return res.status(404).json({
+        success: false,
+        message: '사용자를 찾을 수 없습니다.'
+      });
+    }
+
+    // 사용자 삭제
+    const { error: deleteError } = await supabase
+      .from('users')
+      .delete()
+      .eq('id', id);
+
+    if (deleteError) throw deleteError;
+
+    res.json({
+      success: true,
+      message: '사용자가 성공적으로 삭제되었습니다.'
+    });
+
+  } catch (error) {
+    console.error('사용자 삭제 오류:', error);
     res.status(500).json({
       success: false,
       message: '서버 오류가 발생했습니다.'

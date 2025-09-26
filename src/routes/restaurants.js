@@ -9,7 +9,7 @@ const router = express.Router();
 router.get('/', [
   query('page').optional().isInt({ min: 1 }),
   query('limit').optional().isInt({ min: 1, max: 100 }),
-  query('category').optional().isInt()
+  query('category_id').optional().isInt()
 ], async (req, res) => {
   try {
     const errors = validationResult(req);
@@ -23,7 +23,7 @@ router.get('/', [
 
     const page = parseInt(req.query.page) || 1;
     const limit = parseInt(req.query.limit) || 20;
-    const categoryId = req.query.category;
+    const categoryId = req.query.category_id;
     const offset = (page - 1) * limit;
 
     let restaurants;

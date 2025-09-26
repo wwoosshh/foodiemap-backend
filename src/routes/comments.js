@@ -69,7 +69,18 @@ const requireAuth = async (req, res, next) => {
     }
 
     const token = authHeader.substring(7);
-    const { data: { user }, error } = await supabase.auth.getUser(token);
+    const jwt = require('jsonwebtoken');
+    const jwtSecret = process.env.JWT_SECRET || 'fallback-secret-key-for-development-only';
+
+    const decoded = jwt.verify(token, jwtSecret);
+    const userId = decoded.userId;
+
+    // 사용자 정보 조회
+    const { data: user, error } = await supabaseAdmin
+      .from('users')
+      .select('id, email, name, avatar_url')
+      .eq('id', userId)
+      .single();
 
     if (error || !user) {
       return errorResponse(res, 401, '유효하지 않은 토큰입니다.');

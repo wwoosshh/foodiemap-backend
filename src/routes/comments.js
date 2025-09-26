@@ -134,7 +134,7 @@ router.get('/:restaurantId',
           created_at,
           updated_at,
           likes_count,
-          parent_id,
+          parent_comment_id,
           profiles:user_id (
             username,
             avatar_url
@@ -177,15 +177,15 @@ router.get('/:restaurantId',
 
         commentMap.set(comment.id, processedComment);
 
-        if (!comment.parent_id) {
+        if (!comment.parent_comment_id) {
           rootComments.push(processedComment);
         }
       });
 
       // 답글을 부모 댓글에 연결
       comments.forEach(comment => {
-        if (comment.parent_id && commentMap.has(comment.parent_id)) {
-          const parentComment = commentMap.get(comment.parent_id);
+        if (comment.parent_comment_id && commentMap.has(comment.parent_comment_id)) {
+          const parentComment = commentMap.get(comment.parent_comment_id);
           const replyComment = commentMap.get(comment.id);
           parentComment.replies.push(replyComment);
         }
@@ -274,7 +274,7 @@ router.post('/',
           restaurant_id,
           user_id,
           content: content.trim(),
-          parent_id
+          parent_comment_id: parent_id
         })
         .select(`
           id,
@@ -283,7 +283,7 @@ router.post('/',
           created_at,
           updated_at,
           likes_count,
-          parent_id,
+          parent_comment_id,
           profiles:user_id (
             username,
             avatar_url

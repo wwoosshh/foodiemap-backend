@@ -162,8 +162,8 @@ router.get('/:restaurantId',
           created_at,
           updated_at,
           helpful_count,
-          profiles:user_id (
-            username,
+          users:user_id (
+            name,
             avatar_url
           ),
           review_helpful:review_helpful!left (
@@ -188,8 +188,8 @@ router.get('/:restaurantId',
       const processedReviews = reviews.map(review => ({
         id: review.id,
         user_id: review.user_id,
-        username: review.profiles?.username || '알 수 없는 사용자',
-        avatar_url: review.profiles?.avatar_url,
+        username: review.users?.name || '알 수 없는 사용자',
+        avatar_url: review.users?.avatar_url,
         rating: review.rating,
         title: review.title,
         content: review.content,
@@ -336,8 +336,8 @@ router.post('/',
           created_at,
           updated_at,
           helpful_count,
-          profiles:user_id (
-            username,
+          users:user_id (
+            name,
             avatar_url
           )
         `)
@@ -350,8 +350,8 @@ router.post('/',
       const responseReview = {
         id: review.id,
         user_id: review.user_id,
-        username: review.profiles?.username || '알 수 없는 사용자',
-        avatar_url: review.profiles?.avatar_url,
+        username: review.users?.name || '알 수 없는 사용자',
+        avatar_url: review.users?.avatar_url,
         rating: review.rating,
         title: review.title,
         content: review.content,
@@ -436,8 +436,8 @@ router.put('/:reviewId',
           created_at,
           updated_at,
           helpful_count,
-          profiles:user_id (
-            username,
+          users:user_id (
+            name,
             avatar_url
           )
         `)

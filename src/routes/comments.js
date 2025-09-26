@@ -135,8 +135,8 @@ router.get('/:restaurantId',
           updated_at,
           likes_count,
           parent_comment_id,
-          profiles:user_id (
-            username,
+          users:user_id (
+            name,
             avatar_url
           ),
           comment_likes:restaurant_comment_likes!left (
@@ -165,8 +165,8 @@ router.get('/:restaurantId',
         const processedComment = {
           id: comment.id,
           user_id: comment.user_id,
-          username: comment.profiles?.username || '알 수 없는 사용자',
-          avatar_url: comment.profiles?.avatar_url,
+          username: comment.users?.name || '알 수 없는 사용자',
+          avatar_url: comment.users?.avatar_url,
           content: comment.content,
           created_at: comment.created_at,
           updated_at: comment.updated_at,
@@ -284,8 +284,8 @@ router.post('/',
           updated_at,
           likes_count,
           parent_comment_id,
-          profiles:user_id (
-            username,
+          users:user_id (
+            name,
             avatar_url
           )
         `)
@@ -305,8 +305,8 @@ router.post('/',
       const responseComment = {
         id: comment.id,
         user_id: comment.user_id,
-        username: comment.profiles?.username || '알 수 없는 사용자',
-        avatar_url: comment.profiles?.avatar_url,
+        username: comment.users?.name || '알 수 없는 사용자',
+        avatar_url: comment.users?.avatar_url,
         content: comment.content,
         created_at: comment.created_at,
         updated_at: comment.updated_at,

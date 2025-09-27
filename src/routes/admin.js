@@ -1158,4 +1158,275 @@ router.patch('/reports/comments/:id', adminAuth, requirePermission('manage_repor
   }
 });
 
+// === 데이터 관리 API ===
+
+// 테이블 데이터 조회
+router.get('/data/:table', adminAuth, requireSuperAdmin, async (req, res) => {
+  try {
+    const { table } = req.params;
+    const { page = 1, limit = 20, search = '' } = req.query;
+
+    // 허용된 테이블만 조회 가능
+    const allowedTables = ['restaurants', 'users', 'restaurant_reviews', 'restaurant_comments', 'banners', 'categories', 'admins'];
+    if (!allowedTables.includes(table)) {
+      return res.status(400).json({
+        success: false,
+        message: '허용되지 않은 테이블입니다.'
+      });
+    }
+
+    const offset = (parseInt(page) - 1) * parseInt(limit);
+    let query = supabase.from(table).select('*', { count: 'exact' });
+
+    // 검색 조건 추가
+    if (search) {
+      if (table === 'restaurants') {
+        query = query.or(`name.ilike.%${search}%,address.ilike.%${search}%,category.ilike.%${search}%`);
+      } else if (table === 'users') {
+        query = query.or(`name.ilike.%${search}%,email.ilike.%${search}%`);
+      } else if (table === 'restaurant_reviews') {
+        query = query.or(`comment.ilike.%${search}%`);
+      } else if (table === 'restaurant_comments') {
+        query = query.or(`comment.ilike.%${search}%`);
+      } else if (table === 'admins') {
+        query = query.or(`name.ilike.%${search}%,email.ilike.%${search}%`);
+      }
+    }
+
+    const { data, error, count } = await query
+      .range(offset, offset + parseInt(limit) - 1)
+      .order('created_at', { ascending: false });
+
+    if (error) throw error;
+
+    res.json({
+      success: true,
+      data: {
+        items: data,
+        total: count,
+        page: parseInt(page),
+        limit: parseInt(limit),
+        totalPages: Math.ceil(count / parseInt(limit))
+      }
+    });
+
+  } catch (error) {
+    console.error('테이블 데이터 조회 오류:', error);
+    res.status(500).json({
+      success: false,
+      message: '서버 오류가 발생했습니다.'
+    });
+  }
+});
+
+// 삭제 미리보기 조회
+router.get('/data/:table/:id/delete-preview', adminAuth, requireSuperAdmin, async (req, res) => {
+  try {
+    const { table, id } = req.params;
+
+    // 허용된 테이블만 처리
+    const allowedTables = ['restaurants', 'users', 'restaurant_reviews', 'restaurant_comments', 'banners', 'categories', 'admins'];
+    if (!allowedTables.includes(table)) {
+      return res.status(400).json({
+        success: false,
+        message: '허용되지 않은 테이블입니다.'
+      });
+    }
+
+    // 메인 아이템 조회
+    const { data: mainItem, error: mainError } = await supabase
+      .from(table)
+      .select('*')
+      .eq('id', id)
+      .single();
+
+    if (mainError || !mainItem) {
+      return res.status(404).json({
+        success: false,
+        message: '항목을 찾을 수 없습니다.'
+      });
+    }
+
+    // 관련 데이터 조회
+    const relatedData = [];
+
+    if (table === 'restaurants') {
+      // 리뷰 수
+      const { count: reviewCount } = await supabase
+        .from('restaurant_reviews')
+        .select('id', { count: 'exact' })
+        .eq('restaurant_id', id);
+
+      // 댓글 수
+      const { count: commentCount } = await supabase
+        .from('restaurant_comments')
+        .select('id', { count: 'exact' })
+        .eq('restaurant_id', id);
+
+      // 즐겨찾기 수
+      const { count: favoriteCount } = await supabase
+        .from('user_favorites')
+        .select('id', { count: 'exact' })
+        .eq('restaurant_id', id);
+
+      relatedData.push(
+        { table: 'restaurant_reviews', count: reviewCount || 0 },
+        { table: 'restaurant_comments', count: commentCount || 0 },
+        { table: 'user_favorites', count: favoriteCount || 0 }
+      );
+
+    } else if (table === 'users') {
+      // 사용자 리뷰 수
+      const { count: reviewCount } = await supabase
+        .from('restaurant_reviews')
+        .select('id', { count: 'exact' })
+        .eq('user_id', id);
+
+      // 사용자 댓글 수
+      const { count: commentCount } = await supabase
+        .from('restaurant_comments')
+        .select('id', { count: 'exact' })
+        .eq('user_id', id);
+
+      // 사용자 즐겨찾기 수
+      const { count: favoriteCount } = await supabase
+        .from('user_favorites')
+        .select('id', { count: 'exact' })
+        .eq('user_id', id);
+
+      relatedData.push(
+        { table: 'restaurant_reviews', count: reviewCount || 0 },
+        { table: 'restaurant_comments', count: commentCount || 0 },
+        { table: 'user_favorites', count: favoriteCount || 0 }
+      );
+    }
+
+    const totalAffectedRecords = relatedData.reduce((sum, item) => sum + item.count, 0) + 1;
+
+    res.json({
+      success: true,
+      data: {
+        mainItem,
+        relatedData,
+        totalAffectedRecords
+      }
+    });
+
+  } catch (error) {
+    console.error('삭제 미리보기 오류:', error);
+    res.status(500).json({
+      success: false,
+      message: '서버 오류가 발생했습니다.'
+    });
+  }
+});
+
+// 연쇄 삭제 실행
+router.delete('/data/:table/:id/cascade', adminAuth, requireSuperAdmin, async (req, res) => {
+  try {
+    const { table, id } = req.params;
+    const { force = false } = req.body;
+
+    // 허용된 테이블만 처리
+    const allowedTables = ['restaurants', 'users', 'restaurant_reviews', 'restaurant_comments', 'banners', 'categories'];
+    if (!allowedTables.includes(table)) {
+      return res.status(400).json({
+        success: false,
+        message: '허용되지 않은 테이블입니다.'
+      });
+    }
+
+    let deletedRecords = 0;
+    const affectedTables = [table];
+
+    if (table === 'restaurants') {
+      // 리뷰 삭제
+      const { error: reviewError, count: reviewCount } = await supabase
+        .from('restaurant_reviews')
+        .delete({ count: 'exact' })
+        .eq('restaurant_id', id);
+
+      if (reviewError && !force) throw reviewError;
+      deletedRecords += reviewCount || 0;
+      if (reviewCount > 0) affectedTables.push('restaurant_reviews');
+
+      // 댓글 삭제
+      const { error: commentError, count: commentCount } = await supabase
+        .from('restaurant_comments')
+        .delete({ count: 'exact' })
+        .eq('restaurant_id', id);
+
+      if (commentError && !force) throw commentError;
+      deletedRecords += commentCount || 0;
+      if (commentCount > 0) affectedTables.push('restaurant_comments');
+
+      // 즐겨찾기 삭제
+      const { error: favoriteError, count: favoriteCount } = await supabase
+        .from('user_favorites')
+        .delete({ count: 'exact' })
+        .eq('restaurant_id', id);
+
+      if (favoriteError && !force) throw favoriteError;
+      deletedRecords += favoriteCount || 0;
+      if (favoriteCount > 0) affectedTables.push('user_favorites');
+
+    } else if (table === 'users') {
+      // 사용자 리뷰 삭제
+      const { error: reviewError, count: reviewCount } = await supabase
+        .from('restaurant_reviews')
+        .delete({ count: 'exact' })
+        .eq('user_id', id);
+
+      if (reviewError && !force) throw reviewError;
+      deletedRecords += reviewCount || 0;
+      if (reviewCount > 0) affectedTables.push('restaurant_reviews');
+
+      // 사용자 댓글 삭제
+      const { error: commentError, count: commentCount } = await supabase
+        .from('restaurant_comments')
+        .delete({ count: 'exact' })
+        .eq('user_id', id);
+
+      if (commentError && !force) throw commentError;
+      deletedRecords += commentCount || 0;
+      if (commentCount > 0) affectedTables.push('restaurant_comments');
+
+      // 사용자 즐겨찾기 삭제
+      const { error: favoriteError, count: favoriteCount } = await supabase
+        .from('user_favorites')
+        .delete({ count: 'exact' })
+        .eq('user_id', id);
+
+      if (favoriteError && !force) throw favoriteError;
+      deletedRecords += favoriteCount || 0;
+      if (favoriteCount > 0) affectedTables.push('user_favorites');
+    }
+
+    // 메인 아이템 삭제
+    const { error: mainError } = await supabase
+      .from(table)
+      .delete()
+      .eq('id', id);
+
+    if (mainError) throw mainError;
+    deletedRecords += 1;
+
+    res.json({
+      success: true,
+      message: '삭제가 완료되었습니다.',
+      data: {
+        deletedRecords,
+        affectedTables
+      }
+    });
+
+  } catch (error) {
+    console.error('연쇄 삭제 오류:', error);
+    res.status(500).json({
+      success: false,
+      message: '삭제 중 오류가 발생했습니다.'
+    });
+  }
+});
+
 module.exports = router;

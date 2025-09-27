@@ -2,6 +2,7 @@ const express = require('express');
 const { body, query, validationResult } = require('express-validator');
 const Restaurant = require('../models/Restaurant');
 const authMiddleware = require('../middleware/auth');
+const supabase = require('../config/supabase');
 
 const router = express.Router();
 
@@ -76,6 +77,150 @@ router.get('/:id', async (req, res) => {
 
   } catch (error) {
     console.error('맛집 상세 조회 오류:', error);
+    res.status(500).json({
+      success: false,
+      message: '서버 오류가 발생했습니다.'
+    });
+  }
+});
+
+// 맛집 상세 정보 조회 (조회수 증가 포함)
+router.get('/:id/details', async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    // 상세 정보 조회
+    const restaurant = await Restaurant.findByIdWithDetails(id);
+    if (!restaurant) {
+      return res.status(404).json({
+        success: false,
+        message: '맛집을 찾을 수 없습니다.'
+      });
+    }
+
+    // 조회수 증가
+    try {
+      await Restaurant.incrementViewCount(id);
+    } catch (viewError) {
+      console.warn('조회수 증가 실패:', viewError);
+      // 조회수 증가 실패해도 상세 정보는 반환
+    }
+
+    res.json({
+      success: true,
+      data: {
+        restaurant
+      }
+    });
+
+  } catch (error) {
+    console.error('맛집 상세 정보 조회 오류:', error);
+    res.status(500).json({
+      success: false,
+      message: '서버 오류가 발생했습니다.'
+    });
+  }
+});
+
+// 즐겨찾기 추가
+router.post('/:id/favorite', authMiddleware, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const userId = req.user.id;
+
+    const favorite = await Restaurant.addToFavorites(userId, id);
+
+    res.json({
+      success: true,
+      message: '즐겨찾기에 추가되었습니다.',
+      data: favorite
+    });
+
+  } catch (error) {
+    console.error('즐겨찾기 추가 오류:', error);
+
+    // 중복 오류 처리
+    if (error.code === '23505') {
+      return res.status(409).json({
+        success: false,
+        message: '이미 즐겨찾기에 추가된 맛집입니다.'
+      });
+    }
+
+    res.status(500).json({
+      success: false,
+      message: '서버 오류가 발생했습니다.'
+    });
+  }
+});
+
+// 즐겨찾기 제거
+router.delete('/:id/favorite', authMiddleware, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const userId = req.user.id;
+
+    await Restaurant.removeFromFavorites(userId, id);
+
+    res.json({
+      success: true,
+      message: '즐겨찾기에서 제거되었습니다.'
+    });
+
+  } catch (error) {
+    console.error('즐겨찾기 제거 오류:', error);
+    res.status(500).json({
+      success: false,
+      message: '서버 오류가 발생했습니다.'
+    });
+  }
+});
+
+// 사용자 즐겨찾기 목록 조회
+router.get('/favorites/my', authMiddleware, async (req, res) => {
+  try {
+    const userId = req.user.id;
+
+    const favorites = await Restaurant.getUserFavorites(userId);
+
+    res.json({
+      success: true,
+      data: {
+        favorites
+      }
+    });
+
+  } catch (error) {
+    console.error('즐겨찾기 목록 조회 오류:', error);
+    res.status(500).json({
+      success: false,
+      message: '서버 오류가 발생했습니다.'
+    });
+  }
+});
+
+// 즐겨찾기 상태 확인
+router.get('/:id/favorite/status', authMiddleware, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const userId = req.user.id;
+
+    const { data, error } = await supabase
+      .from('user_favorites')
+      .select('id')
+      .eq('user_id', userId)
+      .eq('restaurant_id', id)
+      .single();
+
+    res.json({
+      success: true,
+      data: {
+        is_favorited: !!data
+      }
+    });
+
+  } catch (error) {
+    console.error('즐겨찾기 상태 확인 오류:', error);
     res.status(500).json({
       success: false,
       message: '서버 오류가 발생했습니다.'

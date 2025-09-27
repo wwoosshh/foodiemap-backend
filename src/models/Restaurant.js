@@ -69,6 +69,52 @@ class Restaurant {
     return data;
   }
 
+  static async findByIdWithDetails(id) {
+    const { data, error } = await supabase
+      .from('restaurants')
+      .select(`
+        *,
+        categories (
+          id,
+          name,
+          icon
+        ),
+        restaurant_details (
+          *
+        )
+      `)
+      .eq('id', id)
+      .single();
+
+    if (error) throw error;
+    return data;
+  }
+
+  static async incrementViewCount(restaurantId) {
+    // restaurant_details 테이블에서 조회수 증가
+    const { data, error } = await supabase
+      .rpc('increment_restaurant_views', {
+        restaurant_id: restaurantId
+      });
+
+    if (error) {
+      // RPC 함수가 없는 경우 직접 UPDATE
+      const { data: updateData, error: updateError } = await supabase
+        .from('restaurant_details')
+        .update({
+          total_views: supabase.raw('total_views + 1')
+        })
+        .eq('restaurant_id', restaurantId)
+        .select('total_views')
+        .single();
+
+      if (updateError) throw updateError;
+      return updateData;
+    }
+
+    return data;
+  }
+
   static async findByCategory(categoryId, limit = 50) {
     const { data, error } = await supabase
       .from('restaurants')

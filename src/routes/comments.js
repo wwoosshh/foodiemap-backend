@@ -480,4 +480,129 @@ router.delete('/:commentId',
   }
 );
 
+/**
+ * @swagger
+ * /api/comments/{commentId}/report:
+ *   post:
+ *     summary: 댓글 신고
+ *     tags: [Comments]
+ *     parameters:
+ *       - in: path
+ *         name: commentId
+ *         required: true
+ *         schema:
+ *           type: string
+ *           format: uuid
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - reason
+ *             properties:
+ *               reason:
+ *                 type: string
+ *                 description: 신고 사유
+ *               details:
+ *                 type: string
+ *                 description: 상세 설명
+ *     responses:
+ *       200:
+ *         description: 신고 완료
+ *       400:
+ *         description: 잘못된 요청
+ *       401:
+ *         description: 인증 필요
+ *       404:
+ *         description: 댓글을 찾을 수 없음
+ *       409:
+ *         description: 이미 신고한 댓글
+ *     security:
+ *       - bearerAuth: []
+ */
+router.post('/:commentId/report',
+  [
+    param('commentId').isUUID().withMessage('유효한 댓글 ID가 아닙니다'),
+    body('reason').notEmpty().trim().withMessage('신고 사유를 입력해주세요'),
+    body('details').optional().trim()
+  ],
+  requireAuth,
+  async (req, res) => {
+    try {
+      const errors = validationResult(req);
+      if (!errors.isEmpty()) {
+        return errorResponse(res, 400, '입력값이 올바르지 않습니다', errors.array());
+      }
+
+      const { commentId } = req.params;
+      const { reason, details } = req.body;
+      const user_id = req.user.id;
+
+      // 댓글 존재 확인
+      const { data: comment, error: commentError } = await supabaseAdmin
+        .from('restaurant_comments')
+        .select('id, user_id')
+        .eq('id', commentId)
+        .single();
+
+      if (commentError || !comment) {
+        return errorResponse(res, 404, '댓글을 찾을 수 없습니다');
+      }
+
+      // 자신의 댓글은 신고할 수 없음
+      if (comment.user_id === user_id) {
+        return errorResponse(res, 400, '본인의 댓글은 신고할 수 없습니다');
+      }
+
+      // 중복 신고 확인
+      const { data: existingReport } = await supabaseAdmin
+        .from('comment_reports')
+        .select('id')
+        .eq('comment_id', commentId)
+        .eq('reporter_id', user_id)
+        .single();
+
+      if (existingReport) {
+        return errorResponse(res, 409, '이미 신고한 댓글입니다');
+      }
+
+      // 신고 추가
+      const { data: report, error: reportError } = await supabaseAdmin
+        .from('comment_reports')
+        .insert({
+          comment_id: commentId,
+          reporter_id: user_id,
+          reason: reason.trim(),
+          details: details?.trim() || null,
+          created_at: new Date().toISOString()
+        })
+        .select('id')
+        .single();
+
+      if (reportError) {
+        return errorResponse(res, 500, '신고 처리 중 오류가 발생했습니다', reportError.message);
+      }
+
+      // 댓글의 신고 수 증가
+      const { error: updateError } = await supabaseAdmin
+        .from('restaurant_comments')
+        .update({
+          report_count: supabaseAdmin.raw('report_count + 1')
+        })
+        .eq('id', commentId);
+
+      if (updateError) {
+        console.warn('신고 수 업데이트 실패:', updateError.message);
+      }
+
+      return successResponse(res, { report_id: report.id }, '댓글이 신고되었습니다');
+
+    } catch (error) {
+      return errorResponse(res, 500, '서버 오류가 발생했습니다', error.message);
+    }
+  }
+);
+
 module.exports = router;

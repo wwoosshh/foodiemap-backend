@@ -923,4 +923,239 @@ router.delete('/reviews/:id', adminAuth, requirePermission('manage_reviews'), as
   }
 });
 
+// === 신고 관리 API ===
+
+// 리뷰 신고 목록 조회
+router.get('/reports/reviews', adminAuth, requirePermission('manage_reports'), async (req, res) => {
+  try {
+    const { page = 1, limit = 20, status = '' } = req.query;
+    const offset = (page - 1) * limit;
+
+    let query = supabase
+      .from('review_reports')
+      .select(`
+        *,
+        review:review_id (
+          id,
+          comment,
+          rating,
+          user:user_id (
+            id,
+            name,
+            email
+          ),
+          restaurant:restaurant_id (
+            id,
+            name
+          )
+        ),
+        reporter:reporter_id (
+          id,
+          name,
+          email
+        )
+      `, { count: 'exact' })
+      .order('created_at', { ascending: false })
+      .range(offset, offset + limit - 1);
+
+    if (status) {
+      query = query.eq('status', status);
+    }
+
+    const { data, error, count } = await query;
+
+    if (error) throw error;
+
+    res.json({
+      success: true,
+      data: {
+        reports: data,
+        pagination: {
+          page: parseInt(page),
+          limit: parseInt(limit),
+          total: count,
+          pages: Math.ceil(count / limit)
+        }
+      }
+    });
+
+  } catch (error) {
+    console.error('리뷰 신고 목록 조회 오류:', error);
+    res.status(500).json({
+      success: false,
+      message: '서버 오류가 발생했습니다.'
+    });
+  }
+});
+
+// 댓글 신고 목록 조회
+router.get('/reports/comments', adminAuth, requirePermission('manage_reports'), async (req, res) => {
+  try {
+    const { page = 1, limit = 20, status = '' } = req.query;
+    const offset = (page - 1) * limit;
+
+    let query = supabase
+      .from('comment_reports')
+      .select(`
+        *,
+        comment:comment_id (
+          id,
+          content,
+          user:user_id (
+            id,
+            name,
+            email
+          ),
+          restaurant:restaurant_id (
+            id,
+            name
+          )
+        ),
+        reporter:reporter_id (
+          id,
+          name,
+          email
+        )
+      `, { count: 'exact' })
+      .order('created_at', { ascending: false })
+      .range(offset, offset + limit - 1);
+
+    if (status) {
+      query = query.eq('status', status);
+    }
+
+    const { data, error, count } = await query;
+
+    if (error) throw error;
+
+    res.json({
+      success: true,
+      data: {
+        reports: data,
+        pagination: {
+          page: parseInt(page),
+          limit: parseInt(limit),
+          total: count,
+          pages: Math.ceil(count / limit)
+        }
+      }
+    });
+
+  } catch (error) {
+    console.error('댓글 신고 목록 조회 오류:', error);
+    res.status(500).json({
+      success: false,
+      message: '서버 오류가 발생했습니다.'
+    });
+  }
+});
+
+// 리뷰 신고 처리
+router.patch('/reports/reviews/:id', adminAuth, requirePermission('manage_reports'), async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { status, admin_notes, delete_content } = req.body;
+
+    // 신고 상태 업데이트
+    const { error: updateError } = await supabase
+      .from('review_reports')
+      .update({
+        status,
+        admin_notes,
+        admin_id: req.admin.id,
+        processed_at: new Date().toISOString(),
+        updated_at: new Date().toISOString()
+      })
+      .eq('id', id);
+
+    if (updateError) throw updateError;
+
+    // 콘텐츠 삭제 요청 시
+    if (delete_content) {
+      const { data: report } = await supabase
+        .from('review_reports')
+        .select('review_id')
+        .eq('id', id)
+        .single();
+
+      if (report?.review_id) {
+        const { error: deleteError } = await supabase
+          .from('restaurant_reviews')
+          .delete()
+          .eq('id', report.review_id);
+
+        if (deleteError) {
+          console.error('리뷰 삭제 실패:', deleteError);
+        }
+      }
+    }
+
+    res.json({
+      success: true,
+      message: '신고가 처리되었습니다.'
+    });
+
+  } catch (error) {
+    console.error('리뷰 신고 처리 오류:', error);
+    res.status(500).json({
+      success: false,
+      message: '서버 오류가 발생했습니다.'
+    });
+  }
+});
+
+// 댓글 신고 처리
+router.patch('/reports/comments/:id', adminAuth, requirePermission('manage_reports'), async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { status, admin_notes, delete_content } = req.body;
+
+    // 신고 상태 업데이트
+    const { error: updateError } = await supabase
+      .from('comment_reports')
+      .update({
+        status,
+        admin_notes,
+        admin_id: req.admin.id,
+        processed_at: new Date().toISOString(),
+        updated_at: new Date().toISOString()
+      })
+      .eq('id', id);
+
+    if (updateError) throw updateError;
+
+    // 콘텐츠 삭제 요청 시
+    if (delete_content) {
+      const { data: report } = await supabase
+        .from('comment_reports')
+        .select('comment_id')
+        .eq('id', id)
+        .single();
+
+      if (report?.comment_id) {
+        const { error: deleteError } = await supabase
+          .from('restaurant_comments')
+          .delete()
+          .eq('id', report.comment_id);
+
+        if (deleteError) {
+          console.error('댓글 삭제 실패:', deleteError);
+        }
+      }
+    }
+
+    res.json({
+      success: true,
+      message: '신고가 처리되었습니다.'
+    });
+
+  } catch (error) {
+    console.error('댓글 신고 처리 오류:', error);
+    res.status(500).json({
+      success: false,
+      message: '서버 오류가 발생했습니다.'
+    });
+  }
+});
+
 module.exports = router;

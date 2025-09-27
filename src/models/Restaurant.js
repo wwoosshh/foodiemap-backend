@@ -92,17 +92,42 @@ class Restaurant {
 
   static async incrementViewCount(restaurantId) {
     // restaurant_details 테이블에서 조회수 증가
-    const { data, error } = await supabase
-      .rpc('increment_restaurant_views', {
-        restaurant_id: restaurantId
-      });
+    try {
+      // 먼저 현재 조회수 조회
+      const { data: currentData, error: selectError } = await supabase
+        .from('restaurant_details')
+        .select('total_views')
+        .eq('restaurant_id', restaurantId)
+        .single();
 
-    if (error) {
-      // RPC 함수가 없는 경우 직접 UPDATE
+      if (selectError) {
+        // restaurant_details 레코드가 없는 경우 생성
+        if (selectError.code === 'PGRST116') {
+          const { data: insertData, error: insertError } = await supabase
+            .from('restaurant_details')
+            .insert({
+              restaurant_id: restaurantId,
+              total_views: 1,
+              total_favorites: 0,
+              total_comments: 0,
+              total_reviews: 0,
+              average_rating: 0
+            })
+            .select('total_views')
+            .single();
+
+          if (insertError) throw insertError;
+          return insertData;
+        }
+        throw selectError;
+      }
+
+      // 조회수 증가
+      const newViewCount = (currentData.total_views || 0) + 1;
       const { data: updateData, error: updateError } = await supabase
         .from('restaurant_details')
         .update({
-          total_views: supabase.raw('total_views + 1')
+          total_views: newViewCount
         })
         .eq('restaurant_id', restaurantId)
         .select('total_views')
@@ -110,9 +135,10 @@ class Restaurant {
 
       if (updateError) throw updateError;
       return updateData;
+    } catch (error) {
+      console.error('조회수 증가 실패:', error);
+      throw error;
     }
-
-    return data;
   }
 
   static async findByCategory(categoryId, limit = 50) {

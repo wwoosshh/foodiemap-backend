@@ -737,13 +737,27 @@ router.post('/:reviewId/report',
         return errorResponse(res, 500, '신고 처리 중 오류가 발생했습니다', reportError.message);
       }
 
-      // 리뷰의 신고 수 증가
-      const { error: updateError } = await supabaseAdmin
+      // 리뷰의 신고 수 증가 (현재 count 조회 후 +1)
+      const { data: currentReview, error: selectError } = await supabaseAdmin
         .from('restaurant_reviews')
-        .update({
-          report_count: supabaseAdmin.raw('report_count + 1')
-        })
-        .eq('id', reviewId);
+        .select('report_count')
+        .eq('id', reviewId)
+        .single();
+
+      if (!selectError && currentReview) {
+        const { error: updateError } = await supabaseAdmin
+          .from('restaurant_reviews')
+          .update({
+            report_count: (currentReview.report_count || 0) + 1
+          })
+          .eq('id', reviewId);
+
+        if (updateError) {
+          console.warn('신고 수 업데이트 실패:', updateError.message);
+        }
+      } else {
+        console.warn('리뷰 신고 수 조회 실패:', selectError?.message);
+      }
 
       if (updateError) {
         console.warn('신고 수 업데이트 실패:', updateError.message);

@@ -585,16 +585,26 @@ router.post('/:commentId/report',
         return errorResponse(res, 500, '신고 처리 중 오류가 발생했습니다', reportError.message);
       }
 
-      // 댓글의 신고 수 증가
-      const { error: updateError } = await supabaseAdmin
+      // 댓글의 신고 수 증가 (현재 count 조회 후 +1)
+      const { data: currentComment, error: selectError } = await supabaseAdmin
         .from('restaurant_comments')
-        .update({
-          report_count: supabaseAdmin.raw('report_count + 1')
-        })
-        .eq('id', commentId);
+        .select('report_count')
+        .eq('id', commentId)
+        .single();
 
-      if (updateError) {
-        console.warn('신고 수 업데이트 실패:', updateError.message);
+      if (!selectError && currentComment) {
+        const { error: updateError } = await supabaseAdmin
+          .from('restaurant_comments')
+          .update({
+            report_count: (currentComment.report_count || 0) + 1
+          })
+          .eq('id', commentId);
+
+        if (updateError) {
+          console.warn('신고 수 업데이트 실패:', updateError.message);
+        }
+      } else {
+        console.warn('댓글 신고 수 조회 실패:', selectError?.message);
       }
 
       return successResponse(res, { report_id: report.id }, '댓글이 신고되었습니다');

@@ -760,4 +760,167 @@ router.post('/create-admin', adminAuth, requireSuperAdmin, [
   }
 });
 
+// 리뷰 목록 조회 (관리자용)
+router.get('/reviews', adminAuth, requirePermission('manage_reviews'), async (req, res) => {
+  try {
+    const { page = 1, limit = 20, search = '', rating = '', restaurant_id = '', user_id = '' } = req.query;
+    const offset = (page - 1) * limit;
+
+    let query = supabase
+      .from('restaurant_reviews')
+      .select(`
+        *,
+        users:user_id (
+          id,
+          name,
+          email,
+          avatar_url
+        ),
+        restaurants:restaurant_id (
+          id,
+          name,
+          address,
+          categories:category_id (
+            id,
+            name
+          )
+        )
+      `, { count: 'exact' })
+      .order('created_at', { ascending: false })
+      .range(offset, offset + limit - 1);
+
+    if (search) {
+      query = query.or(`comment.ilike.%${search}%,users.name.ilike.%${search}%,restaurants.name.ilike.%${search}%`);
+    }
+
+    if (rating) {
+      query = query.eq('rating', rating);
+    }
+
+    if (restaurant_id) {
+      query = query.eq('restaurant_id', restaurant_id);
+    }
+
+    if (user_id) {
+      query = query.eq('user_id', user_id);
+    }
+
+    const { data, error, count } = await query;
+
+    if (error) throw error;
+
+    res.json({
+      success: true,
+      data: {
+        reviews: data,
+        pagination: {
+          page: parseInt(page),
+          limit: parseInt(limit),
+          total: count,
+          pages: Math.ceil(count / limit)
+        }
+      }
+    });
+
+  } catch (error) {
+    console.error('관리자 리뷰 목록 조회 오류:', error);
+    res.status(500).json({
+      success: false,
+      message: '서버 오류가 발생했습니다.'
+    });
+  }
+});
+
+// 리뷰 상세 조회 (관리자용)
+router.get('/reviews/:id', adminAuth, requirePermission('manage_reviews'), async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    const { data, error } = await supabase
+      .from('restaurant_reviews')
+      .select(`
+        *,
+        users:user_id (
+          id,
+          name,
+          email,
+          avatar_url
+        ),
+        restaurants:restaurant_id (
+          id,
+          name,
+          address,
+          categories:category_id (
+            id,
+            name
+          )
+        )
+      `)
+      .eq('id', id)
+      .single();
+
+    if (error) throw error;
+
+    if (!data) {
+      return res.status(404).json({
+        success: false,
+        message: '리뷰를 찾을 수 없습니다.'
+      });
+    }
+
+    res.json({
+      success: true,
+      data: data
+    });
+
+  } catch (error) {
+    console.error('관리자 리뷰 상세 조회 오류:', error);
+    res.status(500).json({
+      success: false,
+      message: '서버 오류가 발생했습니다.'
+    });
+  }
+});
+
+// 리뷰 삭제 (관리자용)
+router.delete('/reviews/:id', adminAuth, requirePermission('manage_reviews'), async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    // 리뷰 존재 확인
+    const { data: existingReview, error: findError } = await supabase
+      .from('restaurant_reviews')
+      .select('id, user_id, restaurant_id')
+      .eq('id', id)
+      .single();
+
+    if (findError || !existingReview) {
+      return res.status(404).json({
+        success: false,
+        message: '리뷰를 찾을 수 없습니다.'
+      });
+    }
+
+    // 리뷰 삭제
+    const { error: deleteError } = await supabase
+      .from('restaurant_reviews')
+      .delete()
+      .eq('id', id);
+
+    if (deleteError) throw deleteError;
+
+    res.json({
+      success: true,
+      message: '리뷰가 성공적으로 삭제되었습니다.'
+    });
+
+  } catch (error) {
+    console.error('관리자 리뷰 삭제 오류:', error);
+    res.status(500).json({
+      success: false,
+      message: '서버 오류가 발생했습니다.'
+    });
+  }
+});
+
 module.exports = router;

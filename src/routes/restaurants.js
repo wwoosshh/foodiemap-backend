@@ -139,7 +139,22 @@ router.post('/:id/favorite', authMiddleware, async (req, res) => {
   } catch (error) {
     console.error('즐겨찾기 추가 오류:', error);
 
-    // 중복 오류 처리
+    // 커스텀 오류 처리
+    if (error.code === 'PERMISSION_DENIED') {
+      return res.status(403).json({
+        success: false,
+        message: error.message
+      });
+    }
+
+    if (error.code === 'ALREADY_EXISTS') {
+      return res.status(409).json({
+        success: false,
+        message: error.message
+      });
+    }
+
+    // 중복 오류 처리 (백업)
     if (error.code === '23505') {
       return res.status(409).json({
         success: false,
@@ -169,6 +184,15 @@ router.delete('/:id/favorite', authMiddleware, async (req, res) => {
 
   } catch (error) {
     console.error('즐겨찾기 제거 오류:', error);
+
+    // 커스텀 오류 처리
+    if (error.code === 'PERMISSION_DENIED') {
+      return res.status(403).json({
+        success: false,
+        message: error.message
+      });
+    }
+
     res.status(500).json({
       success: false,
       message: '서버 오류가 발생했습니다.'

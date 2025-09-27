@@ -106,10 +106,10 @@ class Restaurant {
       }
 
       if (!currentData) {
-        // restaurant_details 레코드가 없는 경우 생성 (UPSERT 사용)
-        const { data: upsertData, error: upsertError } = await supabase
+        // restaurant_details 레코드가 없는 경우 생성 (일반 INSERT 사용)
+        const { data: insertData, error: insertError } = await supabase
           .from('restaurant_details')
-          .upsert({
+          .insert({
             restaurant_id: restaurantId,
             total_views: 1,
             total_favorites: 0,
@@ -118,22 +118,20 @@ class Restaurant {
             average_rating: 0,
             created_at: new Date().toISOString(),
             updated_at: new Date().toISOString()
-          }, {
-            onConflict: 'restaurant_id'
           })
           .select('total_views')
           .single();
 
-        if (upsertError) {
-          console.error('restaurant_details 생성 실패:', upsertError);
+        if (insertError) {
+          console.error('restaurant_details 생성 실패:', insertError);
           // RLS 정책 오류인 경우 조회수 증가를 무시하고 계속 진행
-          if (upsertError.code === '42501') {
+          if (insertError.code === '42501') {
             console.warn('RLS 정책으로 인해 조회수 증가를 건너뜁니다.');
             return { total_views: 1 };
           }
-          throw upsertError;
+          throw insertError;
         }
-        return upsertData;
+        return insertData;
       }
 
       // 조회수 증가
@@ -221,29 +219,63 @@ class Restaurant {
   }
 
   static async addToFavorites(userId, restaurantId) {
-    const { data, error } = await supabase
-      .from('user_favorites')
-      .insert([{
-        user_id: userId,
-        restaurant_id: restaurantId,
-        created_at: new Date().toISOString()
-      }])
-      .select()
-      .single();
+    try {
+      const { data, error } = await supabase
+        .from('user_favorites')
+        .insert([{
+          user_id: userId,
+          restaurant_id: restaurantId,
+          created_at: new Date().toISOString()
+        }])
+        .select()
+        .single();
 
-    if (error) throw error;
-    return data;
+      if (error) {
+        console.error('즐겨찾기 추가 오류:', error);
+        // RLS 정책 오류인 경우 사용자에게 친화적인 메시지 반환
+        if (error.code === '42501') {
+          const customError = new Error('즐겨찾기 기능을 사용할 권한이 없습니다. 로그인 상태를 확인해주세요.');
+          customError.code = 'PERMISSION_DENIED';
+          throw customError;
+        }
+        // 중복 오류 처리
+        if (error.code === '23505') {
+          const customError = new Error('이미 즐겨찾기에 추가된 맛집입니다.');
+          customError.code = 'ALREADY_EXISTS';
+          throw customError;
+        }
+        throw error;
+      }
+      return data;
+    } catch (error) {
+      console.error('즐겨찾기 추가 실패:', error);
+      throw error;
+    }
   }
 
   static async removeFromFavorites(userId, restaurantId) {
-    const { error } = await supabase
-      .from('user_favorites')
-      .delete()
-      .eq('user_id', userId)
-      .eq('restaurant_id', restaurantId);
+    try {
+      const { error } = await supabase
+        .from('user_favorites')
+        .delete()
+        .eq('user_id', userId)
+        .eq('restaurant_id', restaurantId);
 
-    if (error) throw error;
-    return true;
+      if (error) {
+        console.error('즐겨찾기 제거 오류:', error);
+        // RLS 정책 오류인 경우 사용자에게 친화적인 메시지 반환
+        if (error.code === '42501') {
+          const customError = new Error('즐겨찾기 기능을 사용할 권한이 없습니다. 로그인 상태를 확인해주세요.');
+          customError.code = 'PERMISSION_DENIED';
+          throw customError;
+        }
+        throw error;
+      }
+      return true;
+    } catch (error) {
+      console.error('즐겨찾기 제거 실패:', error);
+      throw error;
+    }
   }
 
   static async getUserFavorites(userId) {

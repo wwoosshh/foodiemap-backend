@@ -91,68 +91,39 @@ class Restaurant {
   }
 
   static async incrementViewCount(restaurantId) {
-    // restaurant_details 테이블에서 조회수 증가
-    // RLS 정책 우회를 위해 PostgreSQL 함수 사용 시도
     try {
-      // PostgreSQL 함수로 조회수 증가 시도
-      const { data: rpcData, error: rpcError } = await supabase
-        .rpc('increment_restaurant_views', {
-          restaurant_id: restaurantId
-        });
-
-      if (!rpcError) {
-        console.log('RPC 함수로 조회수 증가 성공:', rpcData);
-        return { total_views: rpcData || 1 };
-      }
-
-      console.warn('RPC 함수 실패, 직접 DB 접근 시도:', rpcError);
-
-      // RPC 함수가 없거나 실패한 경우 직접 처리
-      // 1. 먼저 현재 데이터 확인
+      // 현재 조회수 조회
       const { data: currentData, error: selectError } = await supabase
         .from('restaurant_details')
         .select('total_views')
         .eq('restaurant_id', restaurantId)
-        .maybeSingle();
+        .single();
 
-      if (selectError && selectError.code !== 'PGRST116') {
-        console.error('조회수 조회 실패:', selectError);
-        // RLS 오류여도 조회수 기능은 무시하고 계속 진행
-        if (selectError.code === '42501') {
-          console.warn('RLS 정책으로 인해 조회수 기능을 건너뜁니다.');
-          return { total_views: 0 };
+      if (selectError) {
+        // restaurant_details 레코드가 없는 경우 생성
+        if (selectError.code === 'PGRST116') {
+          const { data: insertData, error: insertError } = await supabase
+            .from('restaurant_details')
+            .insert({
+              restaurant_id: restaurantId,
+              total_views: 1,
+              total_favorites: 0,
+              total_comments: 0,
+              total_reviews: 0,
+              average_rating: 0,
+              created_at: new Date().toISOString(),
+              updated_at: new Date().toISOString()
+            })
+            .select('total_views')
+            .single();
+
+          if (insertError) throw insertError;
+          return insertData;
         }
+        throw selectError;
       }
 
-      if (!currentData) {
-        // 레코드가 없는 경우 생성 시도
-        const { data: insertData, error: insertError } = await supabase
-          .from('restaurant_details')
-          .insert({
-            restaurant_id: restaurantId,
-            total_views: 1,
-            total_favorites: 0,
-            total_comments: 0,
-            total_reviews: 0,
-            average_rating: 0,
-            created_at: new Date().toISOString(),
-            updated_at: new Date().toISOString()
-          })
-          .select('total_views')
-          .maybeSingle();
-
-        if (insertError) {
-          console.error('restaurant_details 생성 실패:', insertError);
-          // RLS 정책 오류인 경우에도 기능 정상 진행
-          if (insertError.code === '42501') {
-            console.warn('RLS 정책으로 인해 조회수 증가를 건너뜁니다.');
-            return { total_views: 1 };
-          }
-        }
-        return insertData || { total_views: 1 };
-      }
-
-      // 기존 레코드 업데이트
+      // 조회수 증가
       const newViewCount = (currentData.total_views || 0) + 1;
       const { data: updateData, error: updateError } = await supabase
         .from('restaurant_details')
@@ -162,23 +133,13 @@ class Restaurant {
         })
         .eq('restaurant_id', restaurantId)
         .select('total_views')
-        .maybeSingle();
+        .single();
 
-      if (updateError) {
-        console.error('조회수 업데이트 실패:', updateError);
-        // RLS 정책 오류인 경우에도 기능 정상 진행
-        if (updateError.code === '42501') {
-          console.warn('RLS 정책으로 인해 조회수 증가를 건너뜁니다.');
-          return { total_views: newViewCount };
-        }
-      }
-
-      return updateData || { total_views: newViewCount };
-
+      if (updateError) throw updateError;
+      return updateData;
     } catch (error) {
       console.error('조회수 증가 실패:', error);
-      // 조회수 증가 실패해도 전체 API가 실패하지 않도록 함
-      return { total_views: 0 };
+      throw error;
     }
   }
 
@@ -238,85 +199,29 @@ class Restaurant {
   }
 
   static async addToFavorites(userId, restaurantId) {
-    try {
-      // 먼저 중복 확인 (RLS 우회를 위해 조건 없는 조회 시도)
-      const { data: existing } = await supabase
-        .from('user_favorites')
-        .select('id')
-        .eq('user_id', userId)
-        .eq('restaurant_id', restaurantId)
-        .maybeSingle();
-
-      if (existing) {
-        const customError = new Error('이미 즐겨찾기에 추가된 맛집입니다.');
-        customError.code = 'ALREADY_EXISTS';
-        throw customError;
-      }
-
-      const { data, error } = await supabase
-        .from('user_favorites')
-        .insert([{
-          user_id: userId,
-          restaurant_id: restaurantId,
-          created_at: new Date().toISOString()
-        }])
-        .select()
-        .maybeSingle();
-
-      if (error) {
-        console.error('즐겨찾기 추가 오류:', error);
-        // RLS 정책 오류인 경우 성공으로 간주 (임시 해결책)
-        if (error.code === '42501') {
-          console.warn('RLS 정책으로 인한 오류이지만 즐겨찾기 추가를 성공으로 처리합니다.');
-          return {
-            id: 'temp-' + Date.now(),
-            user_id: userId,
-            restaurant_id: restaurantId,
-            created_at: new Date().toISOString()
-          };
-        }
-        // 중복 오류 처리
-        if (error.code === '23505') {
-          const customError = new Error('이미 즐겨찾기에 추가된 맛집입니다.');
-          customError.code = 'ALREADY_EXISTS';
-          throw customError;
-        }
-        throw error;
-      }
-      return data || {
-        id: 'temp-' + Date.now(),
+    const { data, error } = await supabase
+      .from('user_favorites')
+      .insert([{
         user_id: userId,
         restaurant_id: restaurantId,
         created_at: new Date().toISOString()
-      };
-    } catch (error) {
-      console.error('즐겨찾기 추가 실패:', error);
-      throw error;
-    }
+      }])
+      .select()
+      .single();
+
+    if (error) throw error;
+    return data;
   }
 
   static async removeFromFavorites(userId, restaurantId) {
-    try {
-      const { error } = await supabase
-        .from('user_favorites')
-        .delete()
-        .eq('user_id', userId)
-        .eq('restaurant_id', restaurantId);
+    const { error } = await supabase
+      .from('user_favorites')
+      .delete()
+      .eq('user_id', userId)
+      .eq('restaurant_id', restaurantId);
 
-      if (error) {
-        console.error('즐겨찾기 제거 오류:', error);
-        // RLS 정책 오류인 경우 성공으로 간주 (임시 해결책)
-        if (error.code === '42501') {
-          console.warn('RLS 정책으로 인한 오류이지만 즐겨찾기 제거를 성공으로 처리합니다.');
-          return true;
-        }
-        throw error;
-      }
-      return true;
-    } catch (error) {
-      console.error('즐겨찾기 제거 실패:', error);
-      throw error;
-    }
+    if (error) throw error;
+    return true;
   }
 
   static async getUserFavorites(userId) {

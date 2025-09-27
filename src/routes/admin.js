@@ -624,7 +624,7 @@ router.get('/stats', adminAuth, async (req, res) => {
 
       // 전체 리뷰 + 평균 평점
       supabase
-        .from('reviews')
+        .from('restaurant_reviews')
         .select('id, rating, created_at', { count: 'exact' }),
 
       // 카테고리 목록

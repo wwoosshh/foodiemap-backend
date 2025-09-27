@@ -759,10 +759,6 @@ router.post('/:reviewId/report',
         console.warn('리뷰 신고 수 조회 실패:', selectError?.message);
       }
 
-      if (updateError) {
-        console.warn('신고 수 업데이트 실패:', updateError.message);
-      }
-
       return successResponse(res, { report_id: report.id }, '리뷰가 신고되었습니다');
 
     } catch (error) {

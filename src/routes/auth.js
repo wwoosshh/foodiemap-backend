@@ -169,7 +169,8 @@ router.post('/login', [
           email: user.email,
           name: user.name,
           phone: user.phone,
-          avatar_url: user.avatar_url
+          avatar_url: user.avatar_url,
+          email_verified: user.email_verified || false
         },
         token
       }

@@ -71,6 +71,8 @@ const adminRoutes = require('./routes/admin');
 const bannerRoutes = require('./routes/banners');
 const commentRoutes = require('./routes/comments');
 const reviewRoutes = require('./routes/reviews');
+const homeRoutes = require('./routes/home');
+const restaurantDetailRoutes = require('./routes/restaurantDetails');
 
 app.use('/api/auth', authRoutes);
 app.use('/api/restaurants', restaurantRoutes);
@@ -80,6 +82,8 @@ app.use('/api/admin', adminRoutes);
 app.use('/api/banners', bannerRoutes);
 app.use('/api/comments', commentRoutes);
 app.use('/api/reviews', reviewRoutes);
+app.use('/api/home', homeRoutes);
+app.use('/api/restaurant-details', restaurantDetailRoutes);
 
 // API 정보
 app.get('/api', (req, res) => {
@@ -94,7 +98,9 @@ app.get('/api', (req, res) => {
       admin: '/api/admin',
       banners: '/api/banners',
       comments: '/api/comments',
-      reviews: '/api/reviews'
+      reviews: '/api/reviews',
+      home: '/api/home',
+      restaurantDetails: '/api/restaurant-details'
     }
   });
 });

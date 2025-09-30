@@ -124,6 +124,36 @@ router.get('/:id/complete', [
     // 리뷰 통계 계산
     const reviewStats = await calculateReviewStats(restaurantId);
 
+    // 리뷰 데이터 변환 (프론트엔드 형식에 맞게)
+    const transformedReviews = (reviewsResult.data || []).map(review => ({
+      id: review.id,
+      user_id: review.user_id,
+      username: review.users?.name || '알 수 없음',
+      rating: review.rating,
+      title: review.title,
+      content: review.content,
+      images: review.review_images || [],
+      created_at: review.created_at,
+      updated_at: review.updated_at,
+      helpful_count: review.helpful_count || 0,
+      is_helpful: false,
+      tags: []
+    }));
+
+    // 댓글 데이터 변환 (프론트엔드 형식에 맞게)
+    const transformedComments = (commentsResult.data || []).map(comment => ({
+      id: comment.id,
+      user_id: comment.user_id,
+      username: comment.users?.name || '알 수 없음',
+      content: comment.content,
+      created_at: comment.created_at,
+      updated_at: comment.updated_at,
+      likes_count: comment.likes_count || 0,
+      is_liked: false,
+      is_owner: false,
+      replies: []
+    }));
+
     // 응답 데이터 구성
     const responseData = {
       // 맛집 기본 정보
@@ -131,17 +161,17 @@ router.get('/:id/complete', [
 
       // 리뷰 관련
       reviews: {
-        items: reviewsResult.data || [],
+        items: transformedReviews,
         stats: reviewStats,
         total: reviewStats.total_reviews,
-        hasMore: (reviewsResult.data || []).length >= 10
+        hasMore: transformedReviews.length >= 10
       },
 
       // 댓글 관련
       comments: {
-        items: commentsResult.data || [],
-        total: (commentsResult.data || []).length,
-        hasMore: (commentsResult.data || []).length >= 20
+        items: transformedComments,
+        total: transformedComments.length,
+        hasMore: transformedComments.length >= 20
       },
 
       // 메뉴 정보

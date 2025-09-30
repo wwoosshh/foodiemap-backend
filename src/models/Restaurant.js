@@ -24,14 +24,27 @@ class Restaurant {
   }
 
   static async findAll(limit = 50, offset = 0) {
+    // 목록 조회 시 필요한 필드만 선택 (성능 최적화)
     const { data, error } = await supabase
       .from('restaurants')
       .select(`
-        *,
+        id,
+        name,
+        description,
+        address,
+        road_address,
+        phone,
+        images,
+        rating,
+        review_count,
+        price_range,
+        category_id,
+        view_count,
         categories (
           id,
           name,
-          icon
+          icon,
+          color
         )
       `)
       .range(offset, offset + limit - 1)
@@ -70,6 +83,7 @@ class Restaurant {
   }
 
   static async findByIdWithDetails(id) {
+    // 상세 조회 시 모든 필드 선택
     const { data, error } = await supabase
       .from('restaurants')
       .select(`
@@ -77,10 +91,8 @@ class Restaurant {
         categories (
           id,
           name,
-          icon
-        ),
-        restaurant_details (
-          *
+          icon,
+          color
         )
       `)
       .eq('id', id)
@@ -92,47 +104,25 @@ class Restaurant {
 
   static async incrementViewCount(restaurantId) {
     try {
-      // 현재 조회수 조회
+      // 통합된 restaurants 테이블에서 직접 조회수 증가
       const { data: currentData, error: selectError } = await supabase
-        .from('restaurant_details')
-        .select('total_views')
-        .eq('restaurant_id', restaurantId)
+        .from('restaurants')
+        .select('view_count')
+        .eq('id', restaurantId)
         .single();
 
-      if (selectError) {
-        // restaurant_details 레코드가 없는 경우 생성
-        if (selectError.code === 'PGRST116') {
-          const { data: insertData, error: insertError } = await supabase
-            .from('restaurant_details')
-            .insert({
-              restaurant_id: restaurantId,
-              total_views: 1,
-              total_favorites: 0,
-              total_comments: 0,
-              total_reviews: 0,
-              average_rating: 0,
-              created_at: new Date().toISOString(),
-              updated_at: new Date().toISOString()
-            })
-            .select('total_views')
-            .single();
-
-          if (insertError) throw insertError;
-          return insertData;
-        }
-        throw selectError;
-      }
+      if (selectError) throw selectError;
 
       // 조회수 증가
-      const newViewCount = (currentData.total_views || 0) + 1;
+      const newViewCount = (currentData.view_count || 0) + 1;
       const { data: updateData, error: updateError } = await supabase
-        .from('restaurant_details')
+        .from('restaurants')
         .update({
-          total_views: newViewCount,
+          view_count: newViewCount,
           updated_at: new Date().toISOString()
         })
-        .eq('restaurant_id', restaurantId)
-        .select('total_views')
+        .eq('id', restaurantId)
+        .select('view_count')
         .single();
 
       if (updateError) throw updateError;
@@ -144,14 +134,27 @@ class Restaurant {
   }
 
   static async findByCategory(categoryId, limit = 50) {
+    // 카테고리별 목록 조회 시 필요한 필드만 선택
     const { data, error } = await supabase
       .from('restaurants')
       .select(`
-        *,
+        id,
+        name,
+        description,
+        address,
+        road_address,
+        phone,
+        images,
+        rating,
+        review_count,
+        price_range,
+        category_id,
+        view_count,
         categories (
           id,
           name,
-          icon
+          icon,
+          color
         )
       `)
       .eq('category_id', categoryId)
@@ -225,16 +228,29 @@ class Restaurant {
   }
 
   static async getUserFavorites(userId) {
+    // 즐겨찾기 목록 조회 시 필요한 필드만 선택
     const { data, error } = await supabase
       .from('user_favorites')
       .select(`
         *,
         restaurants (
-          *,
+          id,
+          name,
+          description,
+          address,
+          road_address,
+          phone,
+          images,
+          rating,
+          review_count,
+          price_range,
+          category_id,
+          view_count,
           categories (
             id,
             name,
-            icon
+            icon,
+            color
           )
         )
       `)

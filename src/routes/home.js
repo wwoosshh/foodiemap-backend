@@ -23,29 +23,51 @@ router.get('/data', async (req, res) => {
         .select('*')
         .order('id', { ascending: true }),
 
-      // 추천 맛집 (평점 높은 순 3개)
+      // 추천 맛집 (평점 높은 순 3개) - 필요한 필드만 선택
       supabase
         .from('restaurants')
         .select(`
-          *,
+          id,
+          name,
+          description,
+          address,
+          road_address,
+          phone,
+          images,
+          rating,
+          review_count,
+          price_range,
+          category_id,
           categories (
             id,
             name,
-            icon
+            icon,
+            color
           )
         `)
         .order('rating', { ascending: false })
         .limit(3),
 
-      // 일반 맛집 목록 (12개)
+      // 일반 맛집 목록 (12개) - 필요한 필드만 선택
       supabase
         .from('restaurants')
         .select(`
-          *,
+          id,
+          name,
+          description,
+          address,
+          road_address,
+          phone,
+          images,
+          rating,
+          review_count,
+          price_range,
+          category_id,
           categories (
             id,
             name,
-            icon
+            icon,
+            color
           )
         `)
         .order('created_at', { ascending: false })

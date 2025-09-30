@@ -1,6 +1,6 @@
 {
   "name": "foodiemap-backend",
-  "version": "1.0.0",
+  "version": "1.4.6",
   "description": "FoodieMap 백엔드 API 서버 - Render 배포용",
   "main": "src/server.js",
   "scripts": {

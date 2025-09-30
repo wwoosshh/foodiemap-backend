@@ -49,39 +49,48 @@ router.get('/:id/complete', [
 
       // 2. 리뷰 목록 (최신순, 페이지네이션 고려해서 처음 10개)
       supabase
-        .from('reviews')
+        .from('restaurant_reviews')
         .select(`
-          *,
-          users (
+          id,
+          user_id,
+          rating,
+          title,
+          content,
+          review_images,
+          created_at,
+          updated_at,
+          helpful_count,
+          users:user_id (
             id,
             name,
             avatar_url
           )
         `)
         .eq('restaurant_id', restaurantId)
+        .eq('is_deleted', false)
         .order('created_at', { ascending: false })
         .limit(10),
 
       // 3. 댓글 목록 (최신순, 처음 20개)
       supabase
-        .from('comments')
+        .from('restaurant_comments')
         .select(`
-          *,
-          users (
+          id,
+          user_id,
+          content,
+          parent_comment_id,
+          likes_count,
+          created_at,
+          updated_at,
+          users:user_id (
             id,
             name,
             avatar_url
-          ),
-          parent:parent_id (
-            id,
-            content,
-            users (
-              id,
-              name
-            )
           )
         `)
         .eq('restaurant_id', restaurantId)
+        .eq('is_deleted', false)
+        .is('parent_comment_id', null)
         .order('created_at', { ascending: false })
         .limit(20),
 
@@ -173,9 +182,10 @@ router.get('/:id/complete', [
 async function calculateReviewStats(restaurantId) {
   try {
     const { data, error } = await supabase
-      .from('reviews')
+      .from('restaurant_reviews')
       .select('rating')
-      .eq('restaurant_id', restaurantId);
+      .eq('restaurant_id', restaurantId)
+      .eq('is_deleted', false);
 
     if (error) {
       console.error('리뷰 통계 계산 오류:', error);
@@ -239,16 +249,25 @@ router.get('/:id/reviews/more', [
     const limit = parseInt(req.query.limit) || 10;
 
     const { data, error } = await supabase
-      .from('reviews')
+      .from('restaurant_reviews')
       .select(`
-        *,
-        users (
+        id,
+        user_id,
+        rating,
+        title,
+        content,
+        review_images,
+        created_at,
+        updated_at,
+        helpful_count,
+        users:user_id (
           id,
           name,
           avatar_url
         )
       `)
       .eq('restaurant_id', restaurantId)
+      .eq('is_deleted', false)
       .order('created_at', { ascending: false })
       .range(offset, offset + limit - 1);
 
@@ -292,24 +311,24 @@ router.get('/:id/comments/more', [
     const limit = parseInt(req.query.limit) || 20;
 
     const { data, error } = await supabase
-      .from('comments')
+      .from('restaurant_comments')
       .select(`
-        *,
-        users (
+        id,
+        user_id,
+        content,
+        parent_comment_id,
+        likes_count,
+        created_at,
+        updated_at,
+        users:user_id (
           id,
           name,
           avatar_url
-        ),
-        parent:parent_id (
-          id,
-          content,
-          users (
-            id,
-            name
-          )
         )
       `)
       .eq('restaurant_id', restaurantId)
+      .eq('is_deleted', false)
+      .is('parent_comment_id', null)
       .order('created_at', { ascending: false })
       .range(offset, offset + limit - 1);
 

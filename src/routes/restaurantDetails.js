@@ -126,7 +126,7 @@ router.get('/:id/complete', [
 
       // 5. 즐겨찾기 상태 (로그인된 사용자가 있는 경우)
       userId ? supabase
-        .from('favorites')
+        .from('user_favorites')
         .select('id')
         .eq('restaurant_id', restaurantId)
         .eq('user_id', userId)

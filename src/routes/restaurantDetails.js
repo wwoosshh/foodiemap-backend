@@ -23,14 +23,37 @@ router.get('/:id/complete', [
     const restaurantId = req.params.id;
     const userId = req.user?.id; // 인증된 사용자가 있는 경우
 
+    // 조회수 간단하게 1 증가
+    (async () => {
+      try {
+        // 현재 조회수 가져오기
+        const { data: currentData } = await supabase
+          .from('restaurants')
+          .select('view_count')
+          .eq('id', restaurantId)
+          .single();
+
+        if (currentData) {
+          // 조회수 +1 업데이트
+          await supabase
+            .from('restaurants')
+            .update({ view_count: (currentData.view_count || 0) + 1 })
+            .eq('id', restaurantId);
+
+          console.log(`✅ 조회수 증가: ${restaurantId} (${currentData.view_count} -> ${(currentData.view_count || 0) + 1})`);
+        }
+      } catch (err) {
+        console.error('❌ 조회수 증가 실패:', err);
+      }
+    })();
+
     // 병렬로 모든 관련 데이터 가져오기
     const [
       restaurantResult,
       reviewsResult,
       commentsResult,
       menuResult,
-      favoriteStatusResult,
-      viewCountUpdateResult
+      favoriteStatusResult
     ] = await Promise.all([
       // 1. 맛집 기본 정보
       supabase
@@ -107,10 +130,7 @@ router.get('/:id/complete', [
         .select('id')
         .eq('restaurant_id', restaurantId)
         .eq('user_id', userId)
-        .maybeSingle() : Promise.resolve({ data: null }),
-
-      // 6. 조회수 증가
-      supabase.rpc('increment_view_count', { restaurant_id: restaurantId })
+        .maybeSingle() : Promise.resolve({ data: null })
     ]);
 
     // 맛집이 존재하지 않는 경우

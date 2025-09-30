@@ -34,4 +34,35 @@ const authMiddleware = async (req, res, next) => {
   }
 };
 
+// 선택적 인증 미들웨어 (로그인하지 않아도 통과, 로그인 시 user 정보 추가)
+const optionalAuthMiddleware = async (req, res, next) => {
+  try {
+    const token = req.header('Authorization')?.replace('Bearer ', '');
+
+    if (!token) {
+      // 토큰이 없어도 통과 (req.user는 undefined)
+      req.user = null;
+      return next();
+    }
+
+    const decoded = jwt.verify(token, process.env.JWT_SECRET);
+    const user = await User.findById(decoded.userId);
+
+    if (user) {
+      req.user = user;
+    } else {
+      req.user = null;
+    }
+
+    next();
+
+  } catch (error) {
+    // 토큰이 유효하지 않아도 통과 (req.user는 null)
+    console.warn('선택적 인증 - 토큰 검증 실패:', error.message);
+    req.user = null;
+    next();
+  }
+};
+
 module.exports = authMiddleware;
+module.exports.optionalAuth = optionalAuthMiddleware;

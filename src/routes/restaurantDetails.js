@@ -8,6 +8,7 @@ const router = express.Router();
 
 // 맛집 상세정보 통합 조회 (정보, 메뉴, 리뷰, 댓글, 지도 정보 등 모든 데이터)
 router.get('/:id/complete', [
+  authMiddleware.optionalAuth,  // 선택적 인증 추가
   param('id').isUUID().withMessage('올바른 맛집 ID를 입력해주세요.')
 ], async (req, res) => {
   try {
@@ -22,6 +23,8 @@ router.get('/:id/complete', [
 
     const restaurantId = req.params.id;
     const userId = req.user?.id; // 인증된 사용자가 있는 경우
+
+    console.log(`🔐 사용자 인증 상태: userId=${userId}, user=${!!req.user}`);
 
     // 조회수 간단하게 1 증가
     (async () => {
@@ -211,6 +214,9 @@ router.get('/:id/complete', [
         address: restaurantResult.data.address
       } : null
     };
+
+    // 디버깅: 즐겨찾기 상태 로그
+    console.log(`❤️ 즐겨찾기 상태 전송: userId=${userId}, isFavorited=${!!favoriteStatusResult.data}`);
 
     res.json({
       success: true,

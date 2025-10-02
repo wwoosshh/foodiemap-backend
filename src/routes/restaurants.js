@@ -6,11 +6,19 @@ const supabase = require('../config/supabase');
 
 const router = express.Router();
 
-// 맛집 목록 조회
+// 맛집 목록 조회 (정렬 및 검색 기능 포함)
 router.get('/', [
   query('page').optional().isInt({ min: 1 }),
   query('limit').optional().isInt({ min: 1, max: 100 }),
-  query('category_id').optional().isInt()
+  query('category_id').optional().isInt(),
+  query('search').optional().trim(),
+  query('sort').optional().isIn([
+    'view_count_desc',
+    'review_count_desc',
+    'rating_desc',
+    'created_at_desc',
+    'favorite_count_desc'
+  ])
 ], async (req, res) => {
   try {
     const errors = validationResult(req);
@@ -24,24 +32,97 @@ router.get('/', [
 
     const page = parseInt(req.query.page) || 1;
     const limit = parseInt(req.query.limit) || 20;
-    const categoryId = req.query.category_id;
+    const categoryId = req.query.category_id ? parseInt(req.query.category_id) : null;
+    const search = req.query.search || null;
+    const sort = req.query.sort || 'created_at_desc';
     const offset = (page - 1) * limit;
 
-    let restaurants;
+    // Supabase에서 직접 쿼리 (모델 메서드 대신 유연한 쿼리 구성)
+    let query = supabase
+      .from('restaurants')
+      .select(`
+        id,
+        name,
+        description,
+        address,
+        phone,
+        rating,
+        review_count,
+        view_count,
+        favorite_count,
+        images,
+        created_at,
+        categories:category_id (
+          id,
+          name,
+          icon,
+          color
+        )
+      `, { count: 'exact' });
+
+    // 카테고리 필터
     if (categoryId) {
-      restaurants = await Restaurant.findByCategory(categoryId, limit);
-    } else {
-      restaurants = await Restaurant.findAll(limit, offset);
+      query = query.eq('category_id', categoryId);
     }
+
+    // 검색 필터 (이름, 주소, 설명)
+    if (search) {
+      query = query.or(`name.ilike.%${search}%,address.ilike.%${search}%,description.ilike.%${search}%`);
+    }
+
+    // 정렬
+    let orderColumn = 'created_at';
+    let orderAscending = false;
+
+    switch (sort) {
+      case 'view_count_desc':
+        orderColumn = 'view_count';
+        break;
+      case 'review_count_desc':
+        orderColumn = 'review_count';
+        break;
+      case 'rating_desc':
+        orderColumn = 'rating';
+        break;
+      case 'favorite_count_desc':
+        orderColumn = 'favorite_count';
+        break;
+      case 'created_at_desc':
+      default:
+        orderColumn = 'created_at';
+        break;
+    }
+
+    query = query.order(orderColumn, { ascending: orderAscending });
+
+    // 페이지네이션
+    query = query.range(offset, offset + limit - 1);
+
+    const { data: restaurants, error, count } = await query;
+
+    if (error) {
+      console.error('Supabase 쿼리 오류:', error);
+      throw error;
+    }
+
+    const totalPages = count ? Math.ceil(count / limit) : 0;
 
     res.json({
       success: true,
       data: {
-        restaurants,
+        restaurants: restaurants || [],
         pagination: {
           page,
           limit,
-          hasNext: restaurants.length === limit
+          total: count || 0,
+          totalPages,
+          hasNext: page < totalPages,
+          hasPrev: page > 1
+        },
+        filters: {
+          categoryId,
+          search,
+          sort
         }
       }
     });

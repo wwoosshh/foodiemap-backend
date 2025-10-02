@@ -56,10 +56,33 @@ router.post('/register', [
     const existingUser = await User.findByEmail(email);
     if (existingUser) {
       console.log('❌ 이메일 중복:', email);
-      return res.status(409).json({
-        success: false,
-        message: '이미 등록된 이메일입니다.'
-      });
+
+      // 소셜 로그인 계정인지 확인
+      const providerNames = {
+        'email': '이메일',
+        'google': 'Google',
+        'kakao': 'Kakao',
+        'naver': 'Naver'
+      };
+
+      const provider = providerNames[existingUser.auth_provider] || existingUser.auth_provider;
+
+      if (existingUser.auth_provider !== 'email') {
+        // 소셜 로그인으로 가입된 계정
+        return res.status(409).json({
+          success: false,
+          message: `이미 ${provider}로 가입된 계정입니다. ${provider} 로그인을 이용해주세요.`,
+          error_code: 'EMAIL_ALREADY_EXISTS_WITH_SOCIAL',
+          existing_provider: existingUser.auth_provider
+        });
+      } else {
+        // 일반 이메일로 가입된 계정
+        return res.status(409).json({
+          success: false,
+          message: '이미 등록된 이메일입니다.',
+          error_code: 'EMAIL_ALREADY_EXISTS'
+        });
+      }
     }
     console.log('✅ 이메일 중복 체크 통과');
 
@@ -209,14 +232,40 @@ router.post('/social-login', [
     const { social_id, auth_provider, email, name, phone, avatar_url, social_data } = req.body;
     console.log('✅ 입력 검증 통과');
 
-    // 기존 소셜 로그인 사용자 찾기
+    // 1단계: 기존 소셜 로그인 사용자 찾기 (social_id로 조회)
     console.log('🔍 소셜 계정 조회 시작:', auth_provider, social_id);
     let user = await User.findBySocialId(auth_provider, social_id);
 
     if (user) {
-      console.log('✅ 기존 사용자 발견:', user.id);
+      console.log('✅ 기존 소셜 사용자 발견:', user.id);
     } else {
-      // 새 소셜 로그인 사용자 생성
+      // 2단계: 같은 이메일로 가입된 계정이 있는지 확인
+      console.log('🔍 이메일 중복 체크:', email);
+      const existingUser = await User.findByEmail(email);
+
+      if (existingUser) {
+        // 같은 이메일이 이미 존재하는 경우
+        const providerNames = {
+          'email': '이메일',
+          'google': 'Google',
+          'kakao': 'Kakao',
+          'naver': 'Naver'
+        };
+
+        const existingProvider = providerNames[existingUser.auth_provider] || existingUser.auth_provider;
+        const currentProvider = providerNames[auth_provider] || auth_provider;
+
+        console.log('❌ 이메일 충돌:', email, '기존:', existingUser.auth_provider, '시도:', auth_provider);
+
+        return res.status(409).json({
+          success: false,
+          message: `이미 ${existingProvider}로 가입된 계정입니다. ${existingProvider} 로그인을 이용해주세요.`,
+          error_code: 'EMAIL_ALREADY_EXISTS',
+          existing_provider: existingUser.auth_provider
+        });
+      }
+
+      // 3단계: 새 소셜 로그인 사용자 생성
       console.log('👤 새 소셜 사용자 생성 시작');
       user = await User.createSocialUser({
         email,

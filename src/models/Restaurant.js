@@ -40,6 +40,9 @@ class Restaurant {
         price_range,
         category_id,
         view_count,
+        favorite_count,
+        latitude,
+        longitude,
         categories (
           id,
           name,
@@ -150,6 +153,9 @@ class Restaurant {
         price_range,
         category_id,
         view_count,
+        favorite_count,
+        latitude,
+        longitude,
         categories (
           id,
           name,
@@ -246,6 +252,9 @@ class Restaurant {
           price_range,
           category_id,
           view_count,
+          favorite_count,
+          latitude,
+          longitude,
           categories (
             id,
             name,

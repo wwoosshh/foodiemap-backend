@@ -50,6 +50,8 @@ router.get('/', [
         review_count,
         view_count,
         favorite_count,
+        latitude,
+        longitude,
         images,
         created_at,
         categories:category_id (

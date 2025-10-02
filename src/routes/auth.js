@@ -185,4 +185,83 @@ router.post('/login', [
   }
 });
 
+// 소셜 로그인 (Google, Kakao, Naver)
+router.post('/social-login', [
+  body('social_id').notEmpty(),
+  body('auth_provider').isIn(['google', 'kakao', 'naver']),
+  body('email').isEmail().normalizeEmail(),
+  body('name').notEmpty().trim()
+], async (req, res) => {
+  try {
+    console.log('🔐 소셜 로그인 요청 시작:', req.body);
+
+    // 입력 검증
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) {
+      console.log('❌ 입력 검증 실패:', errors.array());
+      return res.status(400).json({
+        success: false,
+        message: '입력 정보가 올바르지 않습니다.',
+        errors: errors.array()
+      });
+    }
+
+    const { social_id, auth_provider, email, name, phone, avatar_url, social_data } = req.body;
+    console.log('✅ 입력 검증 통과');
+
+    // 기존 소셜 로그인 사용자 찾기
+    console.log('🔍 소셜 계정 조회 시작:', auth_provider, social_id);
+    let user = await User.findBySocialId(auth_provider, social_id);
+
+    if (user) {
+      console.log('✅ 기존 사용자 발견:', user.id);
+    } else {
+      // 새 소셜 로그인 사용자 생성
+      console.log('👤 새 소셜 사용자 생성 시작');
+      user = await User.createSocialUser({
+        email,
+        name,
+        phone,
+        avatar_url,
+        auth_provider,
+        social_id,
+        social_data
+      });
+      console.log('✅ 새 소셜 사용자 생성 완료:', user.id);
+    }
+
+    // JWT 토큰 생성
+    console.log('🔐 JWT 토큰 생성 시작');
+    const token = generateToken(user.id);
+    console.log('✅ JWT 토큰 생성 완료');
+
+    console.log('🎉 소셜 로그인 성공');
+    res.json({
+      success: true,
+      message: '로그인이 완료되었습니다.',
+      data: {
+        user: {
+          id: user.id,
+          email: user.email,
+          name: user.name,
+          phone: user.phone,
+          avatar_url: user.avatar_url,
+          email_verified: user.email_verified || true,
+          created_at: user.created_at
+        },
+        token
+      }
+    });
+
+  } catch (error) {
+    console.error('❌ 소셜 로그인 오류:', error);
+    console.error('❌ 스택 트레이스:', error.stack);
+    res.status(500).json({
+      success: false,
+      message: '서버 오류가 발생했습니다.',
+      error: process.env.NODE_ENV === 'development' ? error.message : undefined
+    });
+  }
+});
+
 module.exports = router;

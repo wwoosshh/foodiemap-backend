@@ -171,6 +171,25 @@ router.post('/login', [
       });
     }
 
+    // 소셜 로그인 계정 확인
+    if (user.auth_provider !== 'email' || !user.password) {
+      const providerNames = {
+        'email': '이메일',
+        'google': 'Google',
+        'kakao': 'Kakao',
+        'naver': 'Naver'
+      };
+
+      const provider = providerNames[user.auth_provider] || user.auth_provider;
+
+      return res.status(400).json({
+        success: false,
+        message: `이 계정은 ${provider} 로그인으로 가입되었습니다. ${provider} 로그인을 이용해주세요.`,
+        error_code: 'SOCIAL_LOGIN_REQUIRED',
+        auth_provider: user.auth_provider
+      });
+    }
+
     // 비밀번호 확인
     const isPasswordValid = await User.verifyPassword(password, user.password);
     if (!isPasswordValid) {

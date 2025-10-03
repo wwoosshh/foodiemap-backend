@@ -332,4 +332,54 @@ router.post('/social-login', [
   }
 });
 
+// 네이버 사용자 정보 가져오기 (CORS 우회용)
+router.post('/naver/user-info', async (req, res) => {
+  try {
+    const { access_token } = req.body;
+
+    if (!access_token) {
+      return res.status(400).json({
+        success: false,
+        message: '액세스 토큰이 필요합니다.'
+      });
+    }
+
+    // 네이버 API 호출 (Node.js 내장 fetch 사용)
+    const response = await fetch('https://openapi.naver.com/v1/nid/me', {
+      headers: {
+        'Authorization': `Bearer ${access_token}`
+      }
+    });
+
+    const data = await response.json();
+
+    if (data.resultcode === '00' && data.response) {
+      const user = data.response;
+      res.json({
+        success: true,
+        data: {
+          social_id: user.id,
+          email: user.email || '',
+          name: user.name || user.nickname || '사용자',
+          phone: user.mobile || user.mobile_e164 || undefined,
+          avatar_url: user.profile_image || undefined,
+          auth_provider: 'naver',
+          social_data: user
+        }
+      });
+    } else {
+      res.status(400).json({
+        success: false,
+        message: '네이버 사용자 정보를 가져올 수 없습니다.'
+      });
+    }
+  } catch (error) {
+    console.error('네이버 사용자 정보 조회 오류:', error);
+    res.status(500).json({
+      success: false,
+      message: '서버 오류가 발생했습니다.'
+    });
+  }
+});
+
 module.exports = router;

@@ -332,6 +332,81 @@ router.post('/social-login', [
   }
 });
 
+// 카카오 사용자 정보 가져오기 (CORS 우회용)
+router.post('/kakao/user-info', async (req, res) => {
+  try {
+    const { code, redirect_uri } = req.body;
+
+    if (!code) {
+      return res.status(400).json({
+        success: false,
+        message: '인증 코드가 필요합니다.'
+      });
+    }
+
+    const clientId = '361fbd23bff0c10f74b2df82729b0756';
+
+    // 1. 카카오 토큰 가져오기
+    const tokenResponse = await fetch('https://kauth.kakao.com/oauth/token', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/x-www-form-urlencoded'
+      },
+      body: new URLSearchParams({
+        grant_type: 'authorization_code',
+        client_id: clientId,
+        redirect_uri: redirect_uri,
+        code: code
+      })
+    });
+
+    const tokenData = await tokenResponse.json();
+
+    if (!tokenData.access_token) {
+      return res.status(400).json({
+        success: false,
+        message: '카카오 토큰을 가져올 수 없습니다.',
+        error: tokenData
+      });
+    }
+
+    // 2. 카카오 사용자 정보 가져오기
+    const userResponse = await fetch('https://kapi.kakao.com/v2/user/me', {
+      headers: {
+        'Authorization': `Bearer ${tokenData.access_token}`
+      }
+    });
+
+    const userData = await userResponse.json();
+    console.log('✅ Kakao user info:', userData);
+
+    if (userData.id) {
+      res.json({
+        success: true,
+        data: {
+          social_id: userData.id.toString(),
+          email: userData.kakao_account?.email || '',
+          name: userData.properties?.nickname || userData.kakao_account?.profile?.nickname || '사용자',
+          avatar_url: userData.properties?.profile_image || userData.kakao_account?.profile?.profile_image_url || undefined,
+          auth_provider: 'kakao',
+          social_data: userData
+        }
+      });
+    } else {
+      res.status(400).json({
+        success: false,
+        message: '카카오 사용자 정보를 가져올 수 없습니다.'
+      });
+    }
+  } catch (error) {
+    console.error('카카오 사용자 정보 조회 오류:', error);
+    res.status(500).json({
+      success: false,
+      message: '서버 오류가 발생했습니다.'
+    });
+  }
+});
+
 // 네이버 사용자 정보 가져오기 (CORS 우회용)
 router.post('/naver/user-info', async (req, res) => {
   try {

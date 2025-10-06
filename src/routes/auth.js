@@ -9,6 +9,15 @@ const cloudinary = require('../config/cloudinary');
 
 const router = express.Router();
 
+// HTTP URL을 HTTPS로 변환하는 유틸리티 함수
+const ensureHttps = (url) => {
+  if (!url) return url;
+  if (typeof url === 'string' && url.startsWith('http://')) {
+    return url.replace('http://', 'https://');
+  }
+  return url;
+};
+
 // JWT 토큰 생성
 const generateToken = (userId) => {
   const jwtSecret = process.env.JWT_SECRET || 'fallback-secret-key-for-development-only';
@@ -253,6 +262,9 @@ router.post('/social-login', [
     const { social_id, auth_provider, email, name, phone, avatar_url, social_data } = req.body;
     console.log('✅ 입력 검증 통과');
 
+    // avatar_url을 HTTPS로 변환
+    const secureAvatarUrl = ensureHttps(avatar_url);
+
     // 1단계: 기존 소셜 로그인 사용자 찾기 (social_id로 조회)
     console.log('🔍 소셜 계정 조회 시작:', auth_provider, social_id);
     let user = await User.findBySocialId(auth_provider, social_id);
@@ -292,7 +304,7 @@ router.post('/social-login', [
         email,
         name,
         phone,
-        avatar_url,
+        avatar_url: secureAvatarUrl,
         auth_provider,
         social_id,
         social_data
@@ -383,13 +395,15 @@ router.post('/kakao/user-info', async (req, res) => {
     console.log('✅ Kakao user info:', userData);
 
     if (userData.id) {
+      const avatarUrl = userData.properties?.profile_image || userData.kakao_account?.profile?.profile_image_url || undefined;
+
       res.json({
         success: true,
         data: {
           social_id: userData.id.toString(),
           email: userData.kakao_account?.email || '',
           name: userData.properties?.nickname || userData.kakao_account?.profile?.nickname || '사용자',
-          avatar_url: userData.properties?.profile_image || userData.kakao_account?.profile?.profile_image_url || undefined,
+          avatar_url: ensureHttps(avatarUrl),
           auth_provider: 'kakao',
           social_data: userData
         }
@@ -439,7 +453,7 @@ router.post('/naver/user-info', async (req, res) => {
           email: user.email || '',
           name: user.name || user.nickname || '사용자',
           phone: user.mobile || user.mobile_e164 || undefined,
-          avatar_url: user.profile_image || undefined,
+          avatar_url: ensureHttps(user.profile_image),
           auth_provider: 'naver',
           social_data: user
         }

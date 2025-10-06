@@ -831,12 +831,24 @@ router.get('/user/my',
           restaurants (
             id,
             name,
+            description,
             address,
+            road_address,
+            phone,
             images,
+            rating,
+            review_count,
+            price_range,
             category_id,
+            view_count,
+            favorite_count,
+            latitude,
+            longitude,
             categories (
               id,
-              name
+              name,
+              icon,
+              color
             )
           )
         `)

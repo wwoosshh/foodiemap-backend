@@ -4,6 +4,8 @@ const jwt = require('jsonwebtoken');
 const { body, validationResult } = require('express-validator');
 const User = require('../models/User');
 const EmailVerification = require('../models/EmailVerification');
+const authMiddleware = require('../middleware/auth');
+const cloudinary = require('../config/cloudinary');
 
 const router = express.Router();
 
@@ -450,6 +452,177 @@ router.post('/naver/user-info', async (req, res) => {
     }
   } catch (error) {
     console.error('네이버 사용자 정보 조회 오류:', error);
+    res.status(500).json({
+      success: false,
+      message: '서버 오류가 발생했습니다.'
+    });
+  }
+});
+
+// 프로필 이미지 업로드
+router.post('/upload-profile-image', authMiddleware, async (req, res) => {
+  try {
+    const { image } = req.body;
+
+    if (!image) {
+      return res.status(400).json({
+        success: false,
+        message: '이미지 데이터가 필요합니다.'
+      });
+    }
+
+    // Cloudinary에 업로드
+    const result = await cloudinary.uploader.upload(image, {
+      folder: 'foodiemap/profiles',
+      transformation: [
+        { width: 400, height: 400, crop: 'fill', gravity: 'face' },
+        { quality: 'auto:good' }
+      ]
+    });
+
+    res.json({
+      success: true,
+      message: '이미지 업로드 완료',
+      data: {
+        url: result.secure_url,
+        public_id: result.public_id
+      }
+    });
+
+  } catch (error) {
+    console.error('이미지 업로드 오류:', error);
+    res.status(500).json({
+      success: false,
+      message: '이미지 업로드 중 오류가 발생했습니다.'
+    });
+  }
+});
+
+// 프로필 정보 수정
+router.put('/profile',
+  authMiddleware,
+  [
+    body('name').optional().notEmpty().trim().withMessage('이름을 입력해주세요'),
+    body('phone').optional().trim(),
+    body('avatar_url').optional().isURL().withMessage('올바른 URL 형식이 아닙니다'),
+    body('current_password').optional(),
+    body('new_password').optional().isLength({ min: 6 }).withMessage('비밀번호는 최소 6자 이상이어야 합니다')
+  ],
+  async (req, res) => {
+    try {
+      const errors = validationResult(req);
+      if (!errors.isEmpty()) {
+        return res.status(400).json({
+          success: false,
+          message: '입력값이 올바르지 않습니다',
+          errors: errors.array()
+        });
+      }
+
+      const userId = req.user.id;
+      const { name, phone, avatar_url, current_password, new_password } = req.body;
+
+      // 비밀번호 변경 요청 시
+      if (new_password) {
+        // 소셜 로그인 계정은 비밀번호 변경 불가
+        if (req.user.auth_provider !== 'email') {
+          return res.status(400).json({
+            success: false,
+            message: '소셜 로그인 계정은 비밀번호를 변경할 수 없습니다.'
+          });
+        }
+
+        // 현재 비밀번호 확인 필수
+        if (!current_password) {
+          return res.status(400).json({
+            success: false,
+            message: '현재 비밀번호를 입력해주세요.'
+          });
+        }
+
+        // 현재 비밀번호 검증
+        const isPasswordValid = await User.verifyPassword(current_password, req.user.password);
+        if (!isPasswordValid) {
+          return res.status(401).json({
+            success: false,
+            message: '현재 비밀번호가 일치하지 않습니다.'
+          });
+        }
+
+        // 새 비밀번호 해싱
+        const hashedPassword = await bcrypt.hash(new_password, 10);
+        await User.update(userId, { password: hashedPassword });
+      }
+
+      // 프로필 정보 업데이트
+      const updateData = {};
+      if (name !== undefined) updateData.name = name;
+      if (phone !== undefined) updateData.phone = phone;
+      if (avatar_url !== undefined) updateData.avatar_url = avatar_url;
+
+      if (Object.keys(updateData).length > 0) {
+        await User.update(userId, updateData);
+      }
+
+      // 업데이트된 사용자 정보 조회
+      const updatedUser = await User.findById(userId);
+
+      res.json({
+        success: true,
+        message: '프로필이 수정되었습니다.',
+        data: {
+          user: {
+            id: updatedUser.id,
+            email: updatedUser.email,
+            name: updatedUser.name,
+            phone: updatedUser.phone,
+            avatar_url: updatedUser.avatar_url,
+            email_verified: updatedUser.email_verified || false,
+            auth_provider: updatedUser.auth_provider
+          }
+        }
+      });
+
+    } catch (error) {
+      console.error('프로필 수정 오류:', error);
+      res.status(500).json({
+        success: false,
+        message: '서버 오류가 발생했습니다.'
+      });
+    }
+  }
+);
+
+// 현재 사용자 정보 조회
+router.get('/me', authMiddleware, async (req, res) => {
+  try {
+    const user = await User.findById(req.user.id);
+
+    if (!user) {
+      return res.status(404).json({
+        success: false,
+        message: '사용자를 찾을 수 없습니다.'
+      });
+    }
+
+    res.json({
+      success: true,
+      data: {
+        user: {
+          id: user.id,
+          email: user.email,
+          name: user.name,
+          phone: user.phone,
+          avatar_url: user.avatar_url,
+          email_verified: user.email_verified || false,
+          auth_provider: user.auth_provider,
+          created_at: user.created_at
+        }
+      }
+    });
+
+  } catch (error) {
+    console.error('사용자 정보 조회 오류:', error);
     res.status(500).json({
       success: false,
       message: '서버 오류가 발생했습니다.'

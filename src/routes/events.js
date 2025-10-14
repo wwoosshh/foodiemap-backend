@@ -109,6 +109,53 @@ router.get('/',
 
 /**
  * @swagger
+ * /api/events/{id}:
+ *   get:
+ *     summary: 이벤트 상세 조회
+ *     tags: [Events]
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *     responses:
+ *       200:
+ *         description: 이벤트 상세
+ *       404:
+ *         description: 이벤트를 찾을 수 없음
+ */
+router.get('/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    // 이벤트 조회
+    const { data: event, error: eventError } = await supabase
+      .from('events')
+      .select('*')
+      .eq('id', id)
+      .eq('is_active', true)
+      .single();
+
+    if (eventError || !event) {
+      return errorResponse(res, 404, '이벤트를 찾을 수 없습니다');
+    }
+
+    // 조회수 증가
+    await supabase
+      .from('events')
+      .update({ view_count: (event.view_count || 0) + 1 })
+      .eq('id', id);
+
+    return successResponse(res, event, '이벤트 조회 성공');
+
+  } catch (error) {
+    return errorResponse(res, 500, '서버 오류가 발생했습니다', error.message);
+  }
+});
+
+/**
+ * @swagger
  * /api/events/notices:
  *   get:
  *     summary: 공지사항 목록 조회
@@ -218,7 +265,7 @@ router.get('/notices/:id', async (req, res) => {
       .update({ view_count: (notice.view_count || 0) + 1 })
       .eq('id', id);
 
-    return successResponse(res, { notice }, '공지사항 조회 성공');
+    return successResponse(res, notice, '공지사항 조회 성공');
 
   } catch (error) {
     return errorResponse(res, 500, '서버 오류가 발생했습니다', error.message);

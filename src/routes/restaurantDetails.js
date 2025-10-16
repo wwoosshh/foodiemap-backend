@@ -83,6 +83,7 @@ router.get('/:id/complete', [
           title,
           content,
           review_images,
+          is_anonymous,
           created_at,
           updated_at,
           helpful_count,
@@ -151,11 +152,13 @@ router.get('/:id/complete', [
     const transformedReviews = (reviewsResult.data || []).map(review => ({
       id: review.id,
       user_id: review.user_id,
-      username: review.users?.name || '알 수 없음',
+      username: review.is_anonymous ? '익명' : (review.users?.name || '알 수 없음'),
+      avatar_url: review.is_anonymous ? null : review.users?.avatar_url,
       rating: review.rating,
       title: review.title,
       content: review.content,
       images: review.review_images || [],
+      is_anonymous: review.is_anonymous,
       created_at: review.created_at,
       updated_at: review.updated_at,
       helpful_count: review.helpful_count || 0,
@@ -313,6 +316,7 @@ router.get('/:id/reviews/more', [
         title,
         content,
         review_images,
+        is_anonymous,
         created_at,
         updated_at,
         helpful_count,
@@ -331,11 +335,29 @@ router.get('/:id/reviews/more', [
       throw error;
     }
 
+    // 리뷰 데이터 변환 (익명 처리)
+    const transformedReviews = (data || []).map(review => ({
+      id: review.id,
+      user_id: review.user_id,
+      username: review.is_anonymous ? '익명' : (review.users?.name || '알 수 없음'),
+      avatar_url: review.is_anonymous ? null : review.users?.avatar_url,
+      rating: review.rating,
+      title: review.title,
+      content: review.content,
+      images: review.review_images || [],
+      is_anonymous: review.is_anonymous,
+      created_at: review.created_at,
+      updated_at: review.updated_at,
+      helpful_count: review.helpful_count || 0,
+      is_helpful: false,
+      tags: []
+    }));
+
     res.json({
       success: true,
       data: {
-        reviews: data || [],
-        hasMore: (data || []).length >= limit
+        reviews: transformedReviews,
+        hasMore: transformedReviews.length >= limit
       }
     });
 

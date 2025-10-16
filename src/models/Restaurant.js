@@ -239,7 +239,7 @@ class Restaurant {
       .from('user_favorites')
       .select(`
         *,
-        restaurants (
+        restaurant:restaurants (
           id,
           name,
           description,

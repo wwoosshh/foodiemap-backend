@@ -24,8 +24,6 @@ router.get('/:id/complete', [
     const restaurantId = req.params.id;
     const userId = req.user?.id; // 인증된 사용자가 있는 경우
 
-    console.log(`🔐 사용자 인증 상태: userId=${userId}, user=${!!req.user}`);
-
     // 조회수 간단하게 1 증가
     (async () => {
       try {
@@ -42,11 +40,9 @@ router.get('/:id/complete', [
             .from('restaurants')
             .update({ view_count: (currentData.view_count || 0) + 1 })
             .eq('id', restaurantId);
-
-          console.log(`✅ 조회수 증가: ${restaurantId} (${currentData.view_count} -> ${(currentData.view_count || 0) + 1})`);
         }
       } catch (err) {
-        console.error('❌ 조회수 증가 실패:', err);
+        // 조회수 증가 실패는 무시
       }
     })();
 
@@ -217,9 +213,6 @@ router.get('/:id/complete', [
         address: restaurantResult.data.address
       } : null
     };
-
-    // 디버깅: 즐겨찾기 상태 로그
-    console.log(`❤️ 즐겨찾기 상태 전송: userId=${userId}, isFavorited=${!!favoriteStatusResult.data}`);
 
     res.json({
       success: true,

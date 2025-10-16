@@ -170,6 +170,7 @@ router.get('/:restaurantId',
           title,
           content,
           review_images,
+          is_anonymous,
           created_at,
           updated_at,
           helpful_count,
@@ -199,13 +200,14 @@ router.get('/:restaurantId',
       const processedReviews = reviews.map(review => ({
         id: review.id,
         user_id: review.user_id,
-        username: review.users?.name || '알 수 없는 사용자',
-        avatar_url: review.users?.avatar_url,
+        username: review.is_anonymous ? '익명' : (review.users?.name || '알 수 없는 사용자'),
+        avatar_url: review.is_anonymous ? null : review.users?.avatar_url,
         rating: review.rating,
         title: review.title,
         content: review.content,
         images: review.review_images || [],
         tags: [],
+        is_anonymous: review.is_anonymous,
         created_at: review.created_at,
         updated_at: review.updated_at,
         helpful_count: review.helpful_count,
@@ -301,7 +303,8 @@ router.post('/',
     body('images').optional().isArray().withMessage('이미지는 배열이어야 합니다'),
     body('images.*').optional().isURL().withMessage('이미지 URL 형식이 올바르지 않습니다'),
     body('tags').optional().isArray().withMessage('태그는 배열이어야 합니다'),
-    body('tags.*').optional().isString().withMessage('태그는 문자열이어야 합니다')
+    body('tags.*').optional().isString().withMessage('태그는 문자열이어야 합니다'),
+    body('is_anonymous').optional().isBoolean().withMessage('익명 여부는 boolean이어야 합니다')
   ],
   requireAuth,
   async (req, res) => {
@@ -311,7 +314,7 @@ router.post('/',
         return errorResponse(res, 400, '입력값이 올바르지 않습니다', errors.array());
       }
 
-      const { restaurant_id, rating, title, content, images, tags } = req.body;
+      const { restaurant_id, rating, title, content, images, tags, is_anonymous } = req.body;
       const user_id = req.user.id;
 
       // 중복 리뷰 확인 (같은 사용자가 같은 맛집에 리뷰 작성했는지)
@@ -335,7 +338,8 @@ router.post('/',
           rating,
           title: title.trim(),
           content: content.trim(),
-          review_images: images || []
+          review_images: images || [],
+          is_anonymous: is_anonymous || false
         })
         .select(`
           id,
@@ -344,6 +348,7 @@ router.post('/',
           title,
           content,
           review_images,
+          is_anonymous,
           created_at,
           updated_at,
           helpful_count,
@@ -361,13 +366,14 @@ router.post('/',
       const responseReview = {
         id: review.id,
         user_id: review.user_id,
-        username: review.users?.name || '알 수 없는 사용자',
-        avatar_url: review.users?.avatar_url,
+        username: review.is_anonymous ? '익명' : (review.users?.name || '알 수 없는 사용자'),
+        avatar_url: review.is_anonymous ? null : review.users?.avatar_url,
         rating: review.rating,
         title: review.title,
         content: review.content,
         images: review.review_images || [],
         tags: [],
+        is_anonymous: review.is_anonymous,
         created_at: review.created_at,
         updated_at: review.updated_at,
         helpful_count: review.helpful_count,
@@ -397,7 +403,8 @@ router.put('/:reviewId',
     body('title').trim().isLength({ min: 1, max: 100 }).withMessage('제목은 1-100자여야 합니다'),
     body('content').trim().isLength({ min: 10, max: 2000 }).withMessage('내용은 10-2000자여야 합니다'),
     body('images').optional().isArray().withMessage('이미지는 배열이어야 합니다'),
-    body('tags').optional().isArray().withMessage('태그는 배열이어야 합니다')
+    body('tags').optional().isArray().withMessage('태그는 배열이어야 합니다'),
+    body('is_anonymous').optional().isBoolean().withMessage('익명 여부는 boolean이어야 합니다')
   ],
   requireAuth,
   async (req, res) => {
@@ -408,7 +415,7 @@ router.put('/:reviewId',
       }
 
       const { reviewId } = req.params;
-      const { rating, title, content, images, tags } = req.body;
+      const { rating, title, content, images, tags, is_anonymous } = req.body;
       const user_id = req.user.id;
 
       // 리뷰 소유권 확인
@@ -427,15 +434,22 @@ router.put('/:reviewId',
       }
 
       // 리뷰 수정
+      const updateData = {
+        rating,
+        title: title.trim(),
+        content: content.trim(),
+        review_images: images || [],
+        updated_at: new Date().toISOString()
+      };
+
+      // is_anonymous가 명시적으로 전달된 경우에만 업데이트
+      if (is_anonymous !== undefined) {
+        updateData.is_anonymous = is_anonymous;
+      }
+
       const { data: updatedReview, error: updateError } = await supabaseAdmin
         .from('restaurant_reviews')
-        .update({
-          rating,
-          title: title.trim(),
-          content: content.trim(),
-          review_images: images || [],
-          updated_at: new Date().toISOString()
-        })
+        .update(updateData)
         .eq('id', reviewId)
         .select(`
           id,
@@ -444,6 +458,7 @@ router.put('/:reviewId',
           title,
           content,
           review_images,
+          is_anonymous,
           created_at,
           updated_at,
           helpful_count,
@@ -461,13 +476,14 @@ router.put('/:reviewId',
       const responseReview = {
         id: updatedReview.id,
         user_id: updatedReview.user_id,
-        username: updatedReview.profiles?.username || '알 수 없는 사용자',
-        avatar_url: updatedReview.profiles?.avatar_url,
+        username: updatedReview.is_anonymous ? '익명' : (updatedReview.users?.name || '알 수 없는 사용자'),
+        avatar_url: updatedReview.is_anonymous ? null : updatedReview.users?.avatar_url,
         rating: updatedReview.rating,
         title: updatedReview.title,
         content: updatedReview.content,
         images: updatedReview.review_images || [],
         tags: [],
+        is_anonymous: updatedReview.is_anonymous,
         created_at: updatedReview.created_at,
         updated_at: updatedReview.updated_at,
         helpful_count: updatedReview.helpful_count,

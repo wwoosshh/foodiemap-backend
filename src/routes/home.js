@@ -9,7 +9,7 @@ const router = express.Router();
 router.get('/data', async (req, res) => {
   try {
     // 병렬로 모든 데이터 가져오기
-    const [bannersResult, categoriesResult, featuredRestaurantsResult, restaurantsResult] = await Promise.all([
+    const [bannersResult, categoriesResult, featuredRestaurantsResult, restaurantsResult, pushedRestaurantsResult] = await Promise.all([
       // 활성화된 배너 조회
       supabase
         .from('banners')
@@ -71,7 +71,44 @@ router.get('/data', async (req, res) => {
           )
         `)
         .order('created_at', { ascending: false })
-        .limit(12)
+        .limit(12),
+
+      // 푸시 맛집 조회 (활성화된 것만, 최대 3개)
+      supabase
+        .from('featured_restaurants')
+        .select(`
+          id,
+          title,
+          subtitle,
+          description,
+          display_order,
+          badge_text,
+          badge_color,
+          restaurant:restaurant_id (
+            id,
+            name,
+            description,
+            address,
+            road_address,
+            phone,
+            images,
+            rating,
+            review_count,
+            view_count,
+            favorite_count,
+            price_range,
+            category_id,
+            categories (
+              id,
+              name,
+              icon,
+              color
+            )
+          )
+        `)
+        .eq('is_active', true)
+        .order('display_order', { ascending: true })
+        .limit(3)
     ]);
 
     // 에러 체크
@@ -87,13 +124,17 @@ router.get('/data', async (req, res) => {
     if (restaurantsResult.error) {
       console.error('맛집 목록 조회 실패:', restaurantsResult.error);
     }
+    if (pushedRestaurantsResult.error) {
+      console.error('푸시 맛집 조회 실패:', pushedRestaurantsResult.error);
+    }
 
     // 응답 데이터 구성
     const responseData = {
       banners: bannersResult.data || [],
       categories: categoriesResult.data || [],
       featuredRestaurants: featuredRestaurantsResult.data || [],
-      restaurants: restaurantsResult.data || []
+      restaurants: restaurantsResult.data || [],
+      pushedRestaurants: pushedRestaurantsResult.data || []
     };
 
     res.json({

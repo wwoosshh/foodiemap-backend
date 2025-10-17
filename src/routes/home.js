@@ -9,7 +9,7 @@ const router = express.Router();
 router.get('/data', async (req, res) => {
   try {
     // 병렬로 모든 데이터 가져오기
-    const [bannersResult, categoriesResult, featuredRestaurantsResult, restaurantsResult, pushedRestaurantsResult] = await Promise.all([
+    const [bannersResult, categoriesResult, featuredRestaurantsResult, restaurantsResult, pushedRestaurantsResult, statsResult] = await Promise.all([
       // 활성화된 배너 조회
       supabase
         .from('banners')
@@ -108,7 +108,24 @@ router.get('/data', async (req, res) => {
         `)
         .eq('is_active', true)
         .order('display_order', { ascending: true })
-        .limit(3)
+        .limit(3),
+
+      // 통계 데이터 조회
+      (async () => {
+        const [restaurantCount, reviewCount, userCount] = await Promise.all([
+          supabase.from('restaurants').select('id', { count: 'exact', head: true }),
+          supabase.from('restaurant_reviews').select('id', { count: 'exact', head: true }),
+          supabase.from('users').select('id', { count: 'exact', head: true })
+        ]);
+        return {
+          data: {
+            totalRestaurants: restaurantCount.count || 0,
+            totalReviews: reviewCount.count || 0,
+            totalUsers: userCount.count || 0
+          },
+          error: restaurantCount.error || reviewCount.error || userCount.error
+        };
+      })()
     ]);
 
     // 에러 체크
@@ -127,6 +144,9 @@ router.get('/data', async (req, res) => {
     if (pushedRestaurantsResult.error) {
       console.error('푸시 맛집 조회 실패:', pushedRestaurantsResult.error);
     }
+    if (statsResult.error) {
+      console.error('통계 조회 실패:', statsResult.error);
+    }
 
     // 응답 데이터 구성
     const responseData = {
@@ -134,7 +154,12 @@ router.get('/data', async (req, res) => {
       categories: categoriesResult.data || [],
       featuredRestaurants: featuredRestaurantsResult.data || [],
       restaurants: restaurantsResult.data || [],
-      pushedRestaurants: pushedRestaurantsResult.data || []
+      pushedRestaurants: pushedRestaurantsResult.data || [],
+      stats: statsResult.data || {
+        totalRestaurants: 0,
+        totalReviews: 0,
+        totalUsers: 0
+      }
     };
 
     res.json({

@@ -26,6 +26,8 @@ app.use(limiter);
 app.use(morgan('combined'));
 app.use(cors({
   origin: [
+    'https://www.mzcube.com',
+    'https://mzcube.com',
     'https://foodiemap-website.vercel.app',
     'http://localhost:3000',
     'http://localhost:5173',

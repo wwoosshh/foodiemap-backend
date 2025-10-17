@@ -644,4 +644,157 @@ router.get('/me', authMiddleware, async (req, res) => {
   }
 });
 
+// 회원 탈퇴 요청
+router.post('/request-deletion',
+  authMiddleware,
+  [
+    body('reason').optional().trim()
+  ],
+  async (req, res) => {
+    try {
+      const userId = req.user.id;
+      const { reason } = req.body;
+
+      console.log('🗑️ 회원 탈퇴 요청:', userId, reason);
+
+      // 탈퇴 요청 처리
+      const result = await User.requestDeletion(userId, reason);
+
+      console.log('✅ 회원 탈퇴 요청 완료:', result);
+
+      res.json({
+        success: true,
+        message: result.message,
+        data: {
+          deletion_scheduled_at: result.deletion_scheduled_at,
+          deletion_deadline: result.deletion_deadline
+        }
+      });
+
+    } catch (error) {
+      console.error('❌ 회원 탈퇴 요청 오류:', error);
+
+      // PostgreSQL에서 발생한 에러 메시지 파싱
+      if (error.message && error.message.includes('이미 탈퇴 요청된 계정')) {
+        return res.status(400).json({
+          success: false,
+          message: '이미 탈퇴 요청된 계정입니다.'
+        });
+      }
+
+      res.status(500).json({
+        success: false,
+        message: '회원 탈퇴 요청 중 오류가 발생했습니다.',
+        error: process.env.NODE_ENV === 'development' ? error.message : undefined
+      });
+    }
+  }
+);
+
+// 계정 복구
+router.post('/recover-account', authMiddleware, async (req, res) => {
+  try {
+    const userId = req.user.id;
+
+    console.log('♻️ 계정 복구 요청:', userId);
+
+    // 계정 복구 처리
+    const result = await User.recoverAccount(userId);
+
+    console.log('✅ 계정 복구 완료:', result);
+
+    res.json({
+      success: true,
+      message: result.message
+    });
+
+  } catch (error) {
+    console.error('❌ 계정 복구 오류:', error);
+
+    // PostgreSQL에서 발생한 에러 메시지 파싱
+    if (error.message && error.message.includes('탈퇴 요청되지 않은')) {
+      return res.status(400).json({
+        success: false,
+        message: '탈퇴 요청되지 않은 계정입니다.'
+      });
+    }
+
+    if (error.message && error.message.includes('복구 가능 기간이 지났습니다')) {
+      return res.status(400).json({
+        success: false,
+        message: '복구 가능 기간(30일)이 지났습니다.'
+      });
+    }
+
+    res.status(500).json({
+      success: false,
+      message: '계정 복구 중 오류가 발생했습니다.',
+      error: process.env.NODE_ENV === 'development' ? error.message : undefined
+    });
+  }
+});
+
+// 탈퇴 상태 조회
+router.get('/deletion-status', authMiddleware, async (req, res) => {
+  try {
+    const userId = req.user.id;
+
+    console.log('🔍 탈퇴 상태 조회:', userId);
+
+    // 탈퇴 상태 조회
+    const status = await User.getDeletionStatus(userId);
+
+    console.log('✅ 탈퇴 상태 조회 완료:', status);
+
+    res.json({
+      success: true,
+      data: status
+    });
+
+  } catch (error) {
+    console.error('❌ 탈퇴 상태 조회 오류:', error);
+    res.status(500).json({
+      success: false,
+      message: '탈퇴 상태 조회 중 오류가 발생했습니다.',
+      error: process.env.NODE_ENV === 'development' ? error.message : undefined
+    });
+  }
+});
+
+// 만료된 계정 삭제 (크론잡 또는 관리자용)
+router.post('/cleanup-expired-accounts', async (req, res) => {
+  try {
+    // 간단한 보안: API 키 확인
+    const apiKey = req.headers['x-api-key'];
+    if (apiKey !== process.env.CLEANUP_API_KEY) {
+      return res.status(401).json({
+        success: false,
+        message: '인증되지 않은 요청입니다.'
+      });
+    }
+
+    console.log('🧹 만료된 계정 삭제 시작');
+
+    const deletedCount = await User.deleteExpiredAccounts();
+
+    console.log(`✅ 만료된 계정 삭제 완료: ${deletedCount}개`);
+
+    res.json({
+      success: true,
+      message: `${deletedCount}개의 만료된 계정이 삭제되었습니다.`,
+      data: {
+        deleted_count: deletedCount
+      }
+    });
+
+  } catch (error) {
+    console.error('❌ 만료된 계정 삭제 오류:', error);
+    res.status(500).json({
+      success: false,
+      message: '만료된 계정 삭제 중 오류가 발생했습니다.',
+      error: process.env.NODE_ENV === 'development' ? error.message : undefined
+    });
+  }
+});
+
 module.exports = router;

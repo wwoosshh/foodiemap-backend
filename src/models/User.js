@@ -115,6 +115,49 @@ class User {
     if (error) throw error;
     return data;
   }
+
+  // 회원 탈퇴 요청
+  static async requestDeletion(userId, reason = null) {
+    const { data, error } = await supabase
+      .rpc('request_account_deletion', {
+        user_id: userId,
+        reason: reason
+      });
+
+    if (error) throw error;
+    return data;
+  }
+
+  // 계정 복구
+  static async recoverAccount(userId) {
+    const { data, error } = await supabase
+      .rpc('recover_account', {
+        user_id: userId
+      });
+
+    if (error) throw error;
+    return data;
+  }
+
+  // 탈퇴 상태 조회
+  static async getDeletionStatus(userId) {
+    const { data, error } = await supabase
+      .rpc('get_deletion_status', {
+        user_id: userId
+      });
+
+    if (error) throw error;
+    return data;
+  }
+
+  // 만료된 계정 삭제 (관리자용 또는 크론잡용)
+  static async deleteExpiredAccounts() {
+    const { data, error } = await supabase
+      .rpc('delete_expired_accounts');
+
+    if (error) throw error;
+    return data;
+  }
 }
 
 module.exports = User;

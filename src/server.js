@@ -76,6 +76,9 @@ const homeRoutes = require('./routes/home');
 const restaurantDetailRoutes = require('./routes/restaurantDetails');
 const eventRoutes = require('./routes/events');
 
+// 크론잡 시작 (만료된 계정 자동 삭제)
+require('./jobs/cleanup');
+
 app.use('/api/auth', authRoutes);
 app.use('/api/restaurants', restaurantRoutes);
 app.use('/api/categories', categoryRoutes);

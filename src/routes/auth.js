@@ -182,6 +182,16 @@ router.post('/login', [
       });
     }
 
+    // 탈퇴 대기 중인 계정 확인
+    if (user.is_active === false) {
+      return res.status(403).json({
+        success: false,
+        message: '탈퇴 대기 중인 계정입니다. 계정 복구를 원하시면 고객센터에 문의해주세요.',
+        error_code: 'ACCOUNT_DELETION_PENDING',
+        deletion_scheduled_at: user.deletion_scheduled_at
+      });
+    }
+
     // 소셜 로그인 계정 확인
     if (user.auth_provider !== 'email' || !user.password) {
       const providerNames = {
@@ -271,6 +281,16 @@ router.post('/social-login', [
 
     if (user) {
       console.log('✅ 기존 소셜 사용자 발견:', user.id);
+
+      // 탈퇴 대기 중인 계정 확인
+      if (user.is_active === false) {
+        return res.status(403).json({
+          success: false,
+          message: '탈퇴 대기 중인 계정입니다. 계정 복구를 원하시면 고객센터에 문의해주세요.',
+          error_code: 'ACCOUNT_DELETION_PENDING',
+          deletion_scheduled_at: user.deletion_scheduled_at
+        });
+      }
     } else {
       // 2단계: 같은 이메일로 가입된 계정이 있는지 확인
       console.log('🔍 이메일 중복 체크:', email);

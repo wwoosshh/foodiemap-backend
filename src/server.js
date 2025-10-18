@@ -57,6 +57,16 @@ app.use(cors({
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true }));
 
+// 루트 경로 - Render 헬스체크 대응
+app.get('/', (req, res) => {
+  res.status(200).json({
+    status: 'OK',
+    message: 'FoodieMap API Server',
+    version: '1.0',
+    documentation: '/api'
+  });
+});
+
 // Health check 엔드포인트 (Render 필수)
 app.get('/health', async (req, res) => {
   const supabaseConnected = await testSupabaseConnection();

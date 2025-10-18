@@ -1,7 +1,27 @@
 const winston = require('winston');
 
-// 커스텀 포맷: JSON 형식으로 구조화된 로그
-const jsonFormat = winston.format.combine(
+// Pretty JSON 포맷: 들여쓰기가 있는 읽기 쉬운 JSON
+const prettyJsonFormat = winston.format.combine(
+  winston.format.timestamp({ format: 'YYYY-MM-DDTHH:mm:ss.SSSZ' }),
+  winston.format.errors({ stack: true }),
+  winston.format.printf((info) => {
+    // timestamp와 level을 제외한 나머지를 JSON으로 출력
+    const { timestamp, level, message, ...rest } = info;
+
+    // 전체 로그 객체를 보기 좋게 포맷
+    const logObject = {
+      timestamp,
+      level,
+      message,
+      ...rest
+    };
+
+    return JSON.stringify(logObject, null, 2); // 들여쓰기 2칸
+  })
+);
+
+// Compact JSON 포맷: 한 줄로 압축 (필요시)
+const compactJsonFormat = winston.format.combine(
   winston.format.timestamp({ format: 'YYYY-MM-DDTHH:mm:ss.SSSZ' }),
   winston.format.errors({ stack: true }),
   winston.format.json()
@@ -26,7 +46,7 @@ const consoleFormat = winston.format.combine(
 // Logger 생성
 const logger = winston.createLogger({
   level: process.env.LOG_LEVEL || 'info',
-  format: process.env.NODE_ENV === 'production' ? jsonFormat : consoleFormat,
+  format: process.env.NODE_ENV === 'production' ? prettyJsonFormat : consoleFormat,
   defaultMeta: {
     service: 'foodiemap-backend',
     environment: process.env.NODE_ENV || 'development'
@@ -34,7 +54,7 @@ const logger = winston.createLogger({
   transports: [
     // Console transport
     new winston.transports.Console({
-      format: process.env.NODE_ENV === 'production' ? jsonFormat : consoleFormat
+      format: process.env.NODE_ENV === 'production' ? prettyJsonFormat : consoleFormat
     })
   ]
 });
@@ -42,7 +62,7 @@ const logger = winston.createLogger({
 // HTTP 로그 전용 로거
 const httpLogger = winston.createLogger({
   level: 'info',
-  format: jsonFormat,
+  format: prettyJsonFormat,
   defaultMeta: {
     service: 'foodiemap-backend',
     environment: process.env.NODE_ENV || 'development',
@@ -56,7 +76,7 @@ const httpLogger = winston.createLogger({
 // Deploy 로그 전용 로거
 const deployLogger = winston.createLogger({
   level: 'info',
-  format: jsonFormat,
+  format: prettyJsonFormat,
   defaultMeta: {
     service: 'foodiemap-backend',
     environment: process.env.NODE_ENV || 'development',

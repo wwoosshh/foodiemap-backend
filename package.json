@@ -36,7 +36,9 @@
     "morgan": "^1.10.0",
     "multer": "^2.0.0-rc.4",
     "node-cron": "^4.2.1",
-    "nodemailer": "^7.0.6"
+    "nodemailer": "^7.0.6",
+    "uuid": "^13.0.0",
+    "winston": "^3.18.3"
   },
   "devDependencies": {
     "eslint": "^9.15.0",

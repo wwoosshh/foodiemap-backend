@@ -8,6 +8,8 @@ require('dotenv').config();
 
 const testSupabaseConnection = require('./utils/testConnection');
 const testCloudinaryConnection = require('./utils/testCloudinary');
+const { logger, deployLogger } = require('./config/logger');
+const httpLoggingMiddleware = require('./middleware/httpLogger');
 const app = express();
 
 // Render에서 자동으로 할당하는 포트 사용
@@ -23,7 +25,15 @@ const limiter = rateLimit({
 app.use(helmet());
 app.use(compression());
 app.use(limiter);
-app.use(morgan('combined'));
+// 로깅 미들웨어 - 환경에 따라 선택
+if (process.env.ENABLE_DETAILED_LOGGING === 'true') {
+  // 상세한 JSON 로깅 (Railway 스타일)
+  logger.info('🔍 Detailed HTTP logging enabled (Railway style)');
+  app.use(httpLoggingMiddleware);
+} else {
+  // 기본 Morgan 로깅
+  app.use(morgan('combined'));
+}
 app.use(cors({
   origin: [
     'https://www.mzcube.com',
@@ -112,6 +122,7 @@ app.get('/api', (req, res) => {
 
 // 404 핸들러
 app.use('*', (req, res) => {
+  logger.warn(`404 - Route not found: ${req.originalUrl}`);
   res.status(404).json({
     error: 'Not Found',
     message: `Route ${req.originalUrl} not found`
@@ -120,20 +131,36 @@ app.use('*', (req, res) => {
 
 // 에러 핸들러
 app.use((err, req, res, next) => {
-  console.error(err.stack);
+  logger.error('Server Error', {
+    error: err.message,
+    stack: err.stack,
+    requestId: req.requestId,
+    path: req.path
+  });
+
   res.status(500).json({
     error: 'Internal Server Error',
     message: process.env.NODE_ENV === 'production'
       ? 'Something went wrong!'
-      : err.message
+      : err.message,
+    requestId: req.requestId
   });
 });
 
 // 서버 시작
 app.listen(PORT, '0.0.0.0', async () => {
+  deployLogger.info('Server Starting', {
+    port: PORT,
+    timestamp: new Date().toISOString(),
+    environment: process.env.NODE_ENV || 'development',
+    nodeVersion: process.version,
+    detailedLogging: process.env.ENABLE_DETAILED_LOGGING === 'true'
+  });
+
   console.log(`🚀 FoodieMap API Server running on port ${PORT}`);
   console.log(`📅 Started at: ${new Date().toISOString()}`);
   console.log(`🌍 Environment: ${process.env.NODE_ENV || 'development'}`);
+  console.log(`📊 Detailed Logging: ${process.env.ENABLE_DETAILED_LOGGING === 'true' ? 'Enabled' : 'Disabled'}`);
 
   // 서비스 연결 테스트
   await testSupabaseConnection();

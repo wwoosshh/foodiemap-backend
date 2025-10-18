@@ -6,6 +6,11 @@ const { httpLogger } = require('../config/logger');
  * 각 요청에 대해 구조화된 JSON 로그를 생성합니다
  */
 const httpLoggingMiddleware = (req, res, next) => {
+  // OPTIONS 요청 (CORS preflight)은 로깅하지 않음
+  if (req.method === 'OPTIONS') {
+    return next();
+  }
+
   const startTime = Date.now();
   const requestId = uuidv4();
 

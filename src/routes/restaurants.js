@@ -6,6 +6,126 @@ const supabase = require('../config/supabase');
 
 const router = express.Router();
 
+// 다중 정렬 맛집 목록 조회 (한 번의 요청으로 모든 정렬 방식 반환)
+router.get('/multi-sort', [
+  query('limit').optional().isInt({ min: 1, max: 100 }),
+  query('category_id').optional().isInt()
+], async (req, res) => {
+  try {
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) {
+      return res.status(400).json({
+        success: false,
+        message: '쿼리 파라미터가 올바르지 않습니다.',
+        errors: errors.array()
+      });
+    }
+
+    const limit = parseInt(req.query.limit) || 10;
+    const categoryId = req.query.category_id ? parseInt(req.query.category_id) : null;
+
+    // 기본 쿼리 설정
+    const baseSelect = `
+      id,
+      name,
+      description,
+      address,
+      phone,
+      rating,
+      review_count,
+      view_count,
+      favorite_count,
+      latitude,
+      longitude,
+      images,
+      created_at,
+      categories:category_id (
+        id,
+        name,
+        icon,
+        color
+      )
+    `;
+
+    // 병렬로 모든 정렬 방식의 데이터 가져오기
+    const [byRating, byReviewCount, byViewCount, byFavoriteCount, byLatest] = await Promise.all([
+      // 평점 높은 순
+      (async () => {
+        let query = supabase.from('restaurants').select(baseSelect);
+        if (categoryId) query = query.eq('category_id', categoryId);
+        return await query.order('rating', { ascending: false }).limit(limit);
+      })(),
+
+      // 리뷰 많은 순
+      (async () => {
+        let query = supabase.from('restaurants').select(baseSelect);
+        if (categoryId) query = query.eq('category_id', categoryId);
+        return await query.order('review_count', { ascending: false }).limit(limit);
+      })(),
+
+      // 조회수 많은 순
+      (async () => {
+        let query = supabase.from('restaurants').select(baseSelect);
+        if (categoryId) query = query.eq('category_id', categoryId);
+        return await query.order('view_count', { ascending: false }).limit(limit);
+      })(),
+
+      // 좋아요 많은 순
+      (async () => {
+        let query = supabase.from('restaurants').select(baseSelect);
+        if (categoryId) query = query.eq('category_id', categoryId);
+        return await query.order('favorite_count', { ascending: false }).limit(limit);
+      })(),
+
+      // 최신순
+      (async () => {
+        let query = supabase.from('restaurants').select(baseSelect);
+        if (categoryId) query = query.eq('category_id', categoryId);
+        return await query.order('created_at', { ascending: false }).limit(limit);
+      })()
+    ]);
+
+    // 에러 체크
+    if (byRating.error) {
+      console.error('평점순 조회 실패:', byRating.error);
+    }
+    if (byReviewCount.error) {
+      console.error('리뷰순 조회 실패:', byReviewCount.error);
+    }
+    if (byViewCount.error) {
+      console.error('조회수순 조회 실패:', byViewCount.error);
+    }
+    if (byFavoriteCount.error) {
+      console.error('좋아요순 조회 실패:', byFavoriteCount.error);
+    }
+    if (byLatest.error) {
+      console.error('최신순 조회 실패:', byLatest.error);
+    }
+
+    res.json({
+      success: true,
+      data: {
+        byRating: byRating.data || [],
+        byReviewCount: byReviewCount.data || [],
+        byViewCount: byViewCount.data || [],
+        byFavoriteCount: byFavoriteCount.data || [],
+        byLatest: byLatest.data || [],
+        filters: {
+          limit,
+          categoryId
+        }
+      }
+    });
+
+  } catch (error) {
+    console.error('다중 정렬 맛집 조회 오류:', error);
+    res.status(500).json({
+      success: false,
+      message: '서버 오류가 발생했습니다.'
+    });
+  }
+});
+
 // 맛집 목록 조회 (정렬 및 검색 기능 포함)
 router.get('/', [
   query('page').optional().isInt({ min: 1 }),

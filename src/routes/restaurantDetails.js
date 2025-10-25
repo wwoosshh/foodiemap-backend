@@ -52,7 +52,10 @@ router.get('/:id/complete', [
       reviewsResult,
       commentsResult,
       menuResult,
-      favoriteStatusResult
+      favoriteStatusResult,
+      restaurantPhotosResult,
+      restaurantTagsResult,
+      userHelpfulReviewsResult
     ] = await Promise.all([
       // 1. 맛집 기본 정보
       supabase
@@ -130,7 +133,38 @@ router.get('/:id/complete', [
         .select('id')
         .eq('restaurant_id', restaurantId)
         .eq('user_id', userId)
-        .maybeSingle() : Promise.resolve({ data: null })
+        .maybeSingle() : Promise.resolve({ data: null }),
+
+      // 6. 맛집 사진 갤러리
+      supabase
+        .from('restaurant_photos')
+        .select('*')
+        .eq('restaurant_id', restaurantId)
+        .eq('is_approved', true)
+        .order('display_order', { ascending: true }),
+
+      // 7. 맛집 태그
+      supabase
+        .from('restaurant_tags')
+        .select(`
+          score,
+          tags (
+            id,
+            name,
+            category,
+            icon,
+            color
+          )
+        `)
+        .eq('restaurant_id', restaurantId)
+        .order('score', { ascending: false }),
+
+      // 8. 사용자가 도움돼요를 누른 리뷰 (로그인된 사용자가 있는 경우)
+      userId ? supabase
+        .from('review_helpful')
+        .select('review_id')
+        .eq('user_id', userId)
+        : Promise.resolve({ data: [] })
     ]);
 
     // 맛집이 존재하지 않는 경우
@@ -143,6 +177,11 @@ router.get('/:id/complete', [
 
     // 리뷰 통계 계산
     const reviewStats = await calculateReviewStats(restaurantId);
+
+    // 도움돼요를 누른 리뷰 ID 세트
+    const helpfulReviewIds = new Set(
+      (userHelpfulReviewsResult.data || []).map(h => h.review_id)
+    );
 
     // 리뷰 데이터 변환 (프론트엔드 형식에 맞게)
     const transformedReviews = (reviewsResult.data || []).map(review => ({
@@ -158,7 +197,7 @@ router.get('/:id/complete', [
       created_at: review.created_at,
       updated_at: review.updated_at,
       helpful_count: review.helpful_count || 0,
-      is_helpful: false,
+      user_helpful: helpfulReviewIds.has(review.id), // 추가
       tags: []
     }));
 
@@ -175,6 +214,35 @@ router.get('/:id/complete', [
       is_owner: false,
       replies: []
     }));
+
+    // 맛집 사진 카테고리별 분류
+    const allPhotos = restaurantPhotosResult.data || [];
+    const categorizedPhotos = {
+      all: allPhotos,
+      representative: allPhotos.filter(p => p.is_representative),
+      food: allPhotos.filter(p => p.category === 'food'),
+      interior: allPhotos.filter(p => p.category === 'interior'),
+      exterior: allPhotos.filter(p => p.category === 'exterior'),
+      menu: allPhotos.filter(p => p.category === 'menu')
+    };
+
+    // 태그 데이터 변환
+    const transformedTags = (restaurantTagsResult.data || []).map(rt => ({
+      id: rt.tags.id,
+      name: rt.tags.name,
+      category: rt.tags.category,
+      icon: rt.tags.icon,
+      color: rt.tags.color,
+      score: rt.score
+    }));
+
+    // 메뉴 데이터 분류
+    const allMenus = menuResult.data || [];
+    const categorizedMenus = {
+      all: allMenus,
+      signature: allMenus.filter(m => m.is_signature),
+      popular: allMenus.filter(m => m.is_popular)
+    };
 
     // 응답 데이터 구성
     const responseData = {
@@ -196,8 +264,14 @@ router.get('/:id/complete', [
         hasMore: transformedComments.length >= 20
       },
 
-      // 메뉴 정보
-      menus: menuResult.data || [],
+      // 메뉴 정보 (분류됨)
+      menus: categorizedMenus,
+
+      // 맛집 사진 갤러리 (카테고리별)
+      photos: categorizedPhotos,
+
+      // 맛집 태그
+      tags: transformedTags,
 
       // 사용자 관련 정보
       userInfo: userId ? {
@@ -284,6 +358,7 @@ async function calculateReviewStats(restaurantId) {
 
 // 추가 리뷰 로드 (페이지네이션)
 router.get('/:id/reviews/more', [
+  authMiddleware.optionalAuth,  // 선택적 인증 추가
   param('id').isUUID().withMessage('올바른 맛집 ID를 입력해주세요.')
 ], async (req, res) => {
   try {
@@ -297,39 +372,55 @@ router.get('/:id/reviews/more', [
     }
 
     const restaurantId = req.params.id;
+    const userId = req.user?.id; // 인증된 사용자가 있는 경우
     const offset = parseInt(req.query.offset) || 0;
     const limit = parseInt(req.query.limit) || 10;
 
-    const { data, error } = await supabase
-      .from('restaurant_reviews')
-      .select(`
-        id,
-        user_id,
-        rating,
-        title,
-        content,
-        review_images,
-        is_anonymous,
-        created_at,
-        updated_at,
-        helpful_count,
-        users:user_id (
+    // 병렬로 리뷰와 도움돼요 상태 가져오기
+    const [reviewsResult, userHelpfulReviewsResult] = await Promise.all([
+      supabase
+        .from('restaurant_reviews')
+        .select(`
           id,
-          name,
-          avatar_url
-        )
-      `)
-      .eq('restaurant_id', restaurantId)
-      .eq('is_deleted', false)
-      .order('created_at', { ascending: false })
-      .range(offset, offset + limit - 1);
+          user_id,
+          rating,
+          title,
+          content,
+          review_images,
+          is_anonymous,
+          created_at,
+          updated_at,
+          helpful_count,
+          users:user_id (
+            id,
+            name,
+            avatar_url
+          )
+        `)
+        .eq('restaurant_id', restaurantId)
+        .eq('is_deleted', false)
+        .order('created_at', { ascending: false })
+        .range(offset, offset + limit - 1),
 
-    if (error) {
-      throw error;
+      // 사용자가 도움돼요를 누른 리뷰 (로그인된 사용자가 있는 경우)
+      userId ? supabase
+        .from('review_helpful')
+        .select('review_id')
+        .eq('user_id', userId)
+        : Promise.resolve({ data: [] })
+    ]);
+
+    if (reviewsResult.error) {
+      throw reviewsResult.error;
     }
 
+    // 도움돼요를 누른 리뷰 ID 세트
+    const helpfulReviewIds = new Set(
+      (userHelpfulReviewsResult.data || []).map(h => h.review_id)
+    );
+
     // 리뷰 데이터 변환 (익명 처리)
-    const transformedReviews = (data || []).map(review => ({
+    const transformedReviews = (reviewsResult.data || []).map(review => ({
       id: review.id,
       user_id: review.user_id,
       username: review.is_anonymous ? '익명' : (review.users?.name || '알 수 없음'),
@@ -342,7 +433,7 @@ router.get('/:id/reviews/more', [
       created_at: review.created_at,
       updated_at: review.updated_at,
       helpful_count: review.helpful_count || 0,
-      is_helpful: false,
+      user_helpful: helpfulReviewIds.has(review.id),
       tags: []
     }));
 

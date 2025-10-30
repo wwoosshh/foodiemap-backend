@@ -20,7 +20,12 @@ const ensureHttps = (url) => {
 
 // JWT 토큰 생성
 const generateToken = (userId) => {
-  const jwtSecret = process.env.JWT_SECRET || 'fallback-secret-key-for-development-only';
+  const jwtSecret = process.env.JWT_SECRET;
+
+  if (!jwtSecret) {
+    throw new Error('JWT_SECRET environment variable is required');
+  }
+
   return jwt.sign({ userId }, jwtSecret, {
     expiresIn: process.env.JWT_EXPIRES_IN || '7d'
   });
@@ -378,7 +383,15 @@ router.post('/kakao/user-info', async (req, res) => {
       });
     }
 
-    const clientId = '361fbd23bff0c10f74b2df82729b0756';
+    const clientId = process.env.KAKAO_CLIENT_ID;
+
+    if (!clientId) {
+      console.error('KAKAO_CLIENT_ID environment variable is not configured');
+      return res.status(500).json({
+        success: false,
+        message: '소셜 로그인 설정 오류가 발생했습니다.'
+      });
+    }
 
     // 1. 카카오 토큰 가져오기
     const tokenResponse = await fetch('https://kauth.kakao.com/oauth/token', {
@@ -784,9 +797,25 @@ router.get('/deletion-status', authMiddleware, async (req, res) => {
 // 만료된 계정 삭제 (크론잡 또는 관리자용)
 router.post('/cleanup-expired-accounts', async (req, res) => {
   try {
-    // 간단한 보안: API 키 확인
+    // API 키 검증
     const apiKey = req.headers['x-api-key'];
-    if (apiKey !== process.env.CLEANUP_API_KEY) {
+    const validApiKey = process.env.CLEANUP_API_KEY;
+
+    // 환경 변수 필수 확인
+    if (!validApiKey) {
+      console.error('CLEANUP_API_KEY environment variable is not configured');
+      return res.status(500).json({
+        success: false,
+        message: '서버 설정 오류가 발생했습니다.'
+      });
+    }
+
+    // API 키 검증
+    if (!apiKey || apiKey !== validApiKey) {
+      console.warn('Invalid cleanup API key attempt', {
+        ip: req.ip,
+        timestamp: new Date().toISOString()
+      });
       return res.status(401).json({
         success: false,
         message: '인증되지 않은 요청입니다.'

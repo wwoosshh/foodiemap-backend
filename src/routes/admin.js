@@ -14,7 +14,12 @@ const authCodes = new Map(); // { email: { code, expiresAt, adminData } }
 
 // JWT 토큰 생성 (관리자용)
 const generateAdminToken = (adminId) => {
-  const jwtSecret = process.env.JWT_SECRET || 'fallback-secret-key-for-development-only';
+  const jwtSecret = process.env.JWT_SECRET;
+
+  if (!jwtSecret) {
+    throw new Error('JWT_SECRET environment variable is required');
+  }
+
   return jwt.sign({ adminId }, jwtSecret, {
     expiresIn: process.env.JWT_EXPIRES_IN || '24h' // 관리자는 24시간
   });
@@ -136,15 +141,15 @@ router.post('/login', [
       }
     });
 
-    // 🔐 서버 로그에 인증 코드 출력 (Render 로그창에서 확인 가능)
-    console.log('');
-    console.log('🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨');
-    console.log('🔐 ADMIN 2차 인증 코드가 생성되었습니다 🔐');
-    console.log('👤 관리자:', admin.name, `(${admin.email})`);
-    console.log('🔢 인증 코드:', authCode);
-    console.log('⏰ 만료 시간:', expiresAt.toISOString());
-    console.log('🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨');
-    console.log('');
+    // 보안: 2차 인증 코드 생성 로그 (코드는 노출하지 않음)
+    console.log('🔐 관리자 2차 인증 코드가 생성되었습니다', {
+      adminId: admin.id,
+      email: admin.email.replace(/(.{2}).*(@.*)/, '$1***$2'), // 이메일 마스킹
+      expiresAt: expiresAt.toISOString()
+    });
+
+    // TODO: 실제 프로덕션에서는 이메일이나 SMS로 인증 코드 전송
+    // await sendAuthCodeEmail(admin.email, authCode);
 
     res.json({
       success: true,
@@ -215,7 +220,11 @@ router.post('/verify-auth', [
 
     // 코드 검증
     if (authData.code !== code) {
-      console.log('❌ 잘못된 인증 코드:', { expected: authData.code, received: code });
+      console.warn('❌ 관리자 2차 인증 실패', {
+        adminEmail: email.replace(/(.{2}).*(@.*)/, '$1***$2'), // 이메일 마스킹
+        timestamp: new Date().toISOString(),
+        ip: req.ip
+      });
       return res.status(401).json({
         success: false,
         message: '잘못된 인증 코드입니다.'

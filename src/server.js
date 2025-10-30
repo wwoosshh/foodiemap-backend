@@ -6,6 +6,33 @@ const rateLimit = require('express-rate-limit');
 const morgan = require('morgan');
 require('dotenv').config();
 
+// 필수 환경 변수 검증
+const requiredEnvVars = [
+  'JWT_SECRET',
+  'SUPABASE_URL',
+  'SUPABASE_ANON_KEY',
+  'SUPABASE_SERVICE_KEY',
+  'CLOUDINARY_CLOUD_NAME',
+  'CLOUDINARY_API_KEY',
+  'CLOUDINARY_API_SECRET',
+  'KAKAO_CLIENT_ID',
+  'CLEANUP_API_KEY'
+];
+
+const missingEnvVars = requiredEnvVars.filter(varName => !process.env[varName]);
+
+if (missingEnvVars.length > 0) {
+  console.error('❌ Missing required environment variables:');
+  missingEnvVars.forEach(varName => {
+    console.error(`   - ${varName}`);
+  });
+  console.error('\n💡 Please check your .env file and ensure all required variables are set.');
+  console.error('   Refer to .env.example for the required format.\n');
+  process.exit(1);
+}
+
+console.log('✅ All required environment variables are set');
+
 const testSupabaseConnection = require('./utils/testConnection');
 const testCloudinaryConnection = require('./utils/testCloudinary');
 const { logger, deployLogger } = require('./config/logger');
@@ -15,10 +42,41 @@ const app = express();
 // Render에서 자동으로 할당하는 포트 사용
 const PORT = process.env.PORT || 10000;
 
-// Rate limiting
+// Rate limiting - 전역 설정 (일반 API)
 const limiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15분
-  max: 100 // 최대 100개 요청
+  max: 100, // 최대 100개 요청
+  message: '너무 많은 요청이 발생했습니다. 잠시 후 다시 시도해주세요.',
+  standardHeaders: true,
+  legacyHeaders: false,
+});
+
+// Rate limiting - 인증 엔드포인트 (엄격)
+const authLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15분
+  max: 5, // 최대 5회 시도
+  message: '로그인 시도 횟수를 초과했습니다. 15분 후 다시 시도해주세요.',
+  skipSuccessfulRequests: false,
+  standardHeaders: true,
+  legacyHeaders: false,
+});
+
+// Rate limiting - 회원가입 엔드포인트
+const registerLimiter = rateLimit({
+  windowMs: 60 * 60 * 1000, // 1시간
+  max: 3, // 최대 3회 가입 시도
+  message: '가입 시도 횟수를 초과했습니다. 1시간 후 다시 시도해주세요.',
+  standardHeaders: true,
+  legacyHeaders: false,
+});
+
+// Rate limiting - 이메일 인증 엔드포인트
+const verificationLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15분
+  max: 5, // 최대 5회
+  message: '인증 요청 횟수를 초과했습니다. 15분 후 다시 시도해주세요.',
+  standardHeaders: true,
+  legacyHeaders: false,
 });
 
 // 미들웨어 설정
@@ -34,11 +92,16 @@ if (process.env.ENABLE_DETAILED_LOGGING === 'true') {
   // 기본 Morgan 로깅
   app.use(morgan('combined'));
 }
-app.use(cors({
-  origin: [
-    'https://www.mzcube.com',
-    'https://mzcube.com',
-    'https://foodiemap-website.vercel.app',
+// CORS 설정 - 화이트리스트 기반
+const allowedOrigins = [
+  'https://www.mzcube.com',
+  'https://mzcube.com',
+  'https://foodiemap-website.vercel.app'
+];
+
+// 개발 환경에서만 localhost 허용
+if (process.env.NODE_ENV === 'development') {
+  allowedOrigins.push(
     'http://localhost:3000',
     'http://localhost:5173',
     'http://localhost:3004',
@@ -46,9 +109,31 @@ app.use(cors({
     'http://localhost:3002',
     'http://localhost:3003',
     'http://localhost:3005',
-    'http://localhost:3009',
-    process.env.CORS_ORIGIN
-  ].filter(Boolean),
+    'http://localhost:3009'
+  );
+}
+
+app.use(cors({
+  origin: (origin, callback) => {
+    // origin이 없는 경우 허용 (같은 origin 요청, Postman 등)
+    if (!origin) {
+      return callback(null, true);
+    }
+
+    // 화이트리스트에 있는 경우 허용
+    if (allowedOrigins.includes(origin)) {
+      callback(null, true);
+    } else {
+      // 프로덕션에서는 거부, 개발 환경에서는 경고 후 허용
+      if (process.env.NODE_ENV === 'production') {
+        logger.warn('CORS blocked request from unauthorized origin', { origin });
+        callback(new Error('Not allowed by CORS'));
+      } else {
+        logger.warn('CORS: Allowing unauthorized origin in development', { origin });
+        callback(null, true);
+      }
+    }
+  },
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization'],
@@ -89,7 +174,6 @@ const authRoutes = require('./routes/auth');
 const restaurantRoutes = require('./routes/restaurants');
 const categoryRoutes = require('./routes/categories');
 const verificationRoutes = require('./routes/verification');
-const adminRoutes = require('./routes/admin');
 const bannerRoutes = require('./routes/banners');
 const reviewRoutes = require('./routes/reviews');
 const homeRoutes = require('./routes/home');
@@ -99,11 +183,19 @@ const eventRoutes = require('./routes/events');
 // 크론잡 시작 (만료된 계정 자동 삭제)
 require('./jobs/cleanup');
 
+// 라우트 설정 with Rate Limiting
+// 인증 관련 라우트는 엄격한 Rate Limiting 적용
+app.use('/api/auth/login', authLimiter);
+app.use('/api/auth/register', registerLimiter);
+app.use('/api/auth/social', authLimiter); // 소셜 로그인도 제한
 app.use('/api/auth', authRoutes);
+
 app.use('/api/restaurants', restaurantRoutes);
 app.use('/api/categories', categoryRoutes);
-app.use('/api/verification', verificationRoutes);
-app.use('/api/admin', adminRoutes);
+
+// 이메일 인증 엔드포인트
+app.use('/api/verification', verificationLimiter, verificationRoutes);
+
 app.use('/api/banners', bannerRoutes);
 app.use('/api/reviews', reviewRoutes);
 app.use('/api/home', homeRoutes);
@@ -120,7 +212,6 @@ app.get('/api', (req, res) => {
       restaurants: '/api/restaurants',
       categories: '/api/categories',
       verification: '/api/verification',
-      admin: '/api/admin',
       banners: '/api/banners',
       reviews: '/api/reviews',
       home: '/api/home',

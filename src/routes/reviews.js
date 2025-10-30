@@ -10,8 +10,8 @@ if (!process.env.SUPABASE_URL) {
 if (!process.env.SUPABASE_ANON_KEY) {
   throw new Error('SUPABASE_ANON_KEY environment variable is required');
 }
-if (!process.env.SUPABASE_SERVICE_ROLE_KEY) {
-  throw new Error('SUPABASE_SERVICE_ROLE_KEY environment variable is required');
+if (!process.env.SUPABASE_SERVICE_KEY) {
+  throw new Error('SUPABASE_SERVICE_KEY environment variable is required');
 }
 
 const supabase = createClient(
@@ -21,7 +21,7 @@ const supabase = createClient(
 
 const supabaseAdmin = createClient(
   process.env.SUPABASE_URL,
-  process.env.SUPABASE_SERVICE_ROLE_KEY
+  process.env.SUPABASE_SERVICE_KEY
 );
 
 // 에러 응답 헬퍼 함수
@@ -70,7 +70,15 @@ const requireAuth = async (req, res, next) => {
 
     const token = authHeader.substring(7);
     const jwt = require('jsonwebtoken');
-    const jwtSecret = process.env.JWT_SECRET || 'fallback-secret-key-for-development-only';
+    const jwtSecret = process.env.JWT_SECRET;
+
+    if (!jwtSecret) {
+      console.error('JWT_SECRET environment variable is not configured');
+      return res.status(500).json({
+        success: false,
+        message: '서버 설정 오류가 발생했습니다.'
+      });
+    }
 
     const decoded = jwt.verify(token, jwtSecret);
     const userId = decoded.userId;

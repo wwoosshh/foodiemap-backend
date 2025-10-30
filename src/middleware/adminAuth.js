@@ -13,7 +13,16 @@ const adminAuth = async (req, res, next) => {
       });
     }
 
-    const jwtSecret = process.env.JWT_SECRET || 'fallback-secret-key-for-development-only';
+    const jwtSecret = process.env.JWT_SECRET;
+
+    if (!jwtSecret) {
+      console.error('JWT_SECRET environment variable is not configured');
+      return res.status(500).json({
+        success: false,
+        message: '서버 설정 오류가 발생했습니다.'
+      });
+    }
+
     const decoded = jwt.verify(token, jwtSecret);
 
     // 관리자인지 확인

@@ -5,8 +5,8 @@ class User {
   static async create(userData) {
     const { email, password, name, phone, avatar_url } = userData;
 
-    // 비밀번호 해시화
-    const hashedPassword = await bcrypt.hash(password, 10);
+    // 비밀번호 해시화 (12 라운드 - 보안 강화)
+    const hashedPassword = await bcrypt.hash(password, 12);
 
     const { data, error } = await supabase
       .from('users')

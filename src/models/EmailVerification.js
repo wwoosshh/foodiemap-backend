@@ -116,7 +116,8 @@ class EmailVerification {
   }
 
   static generateVerificationCode() {
-    return Math.floor(100000 + Math.random() * 900000).toString(); // 6자리 숫자
+    // 암호학적으로 안전한 난수 생성 (보안 강화)
+    return crypto.randomInt(100000, 1000000).toString(); // 6자리 숫자
   }
 
   static async isEmailVerified(email) {

@@ -507,20 +507,46 @@ router.post('/naver/user-info', async (req, res) => {
 });
 
 // 프로필 이미지 업로드
-router.post('/upload-profile-image', authMiddleware, async (req, res) => {
-  try {
-    const { image } = req.body;
+router.post('/upload-profile-image',
+  authMiddleware,
+  [
+    body('image')
+      .isString()
+      .withMessage('이미지 데이터는 문자열이어야 합니다')
+      .matches(/^data:image\/(jpeg|jpg|png|gif|webp);base64,/)
+      .withMessage('지원하지 않는 이미지 형식입니다 (jpeg, png, gif, webp만 가능)'),
+    body('image').custom((value) => {
+      // Base64 데이터 크기 검증
+      const base64Data = value.split(',')[1];
+      const sizeInBytes = Buffer.from(base64Data, 'base64').length;
+      const maxSize = 5 * 1024 * 1024; // 5MB
 
-    if (!image) {
+      if (sizeInBytes > maxSize) {
+        throw new Error('이미지 크기는 5MB 이하여야 합니다');
+      }
+      return true;
+    })
+  ],
+  async (req, res) => {
+  try {
+    // 검증 결과 확인
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) {
       return res.status(400).json({
         success: false,
-        message: '이미지 데이터가 필요합니다.'
+        message: '이미지 검증 실패',
+        errors: errors.array()
       });
     }
 
-    // Cloudinary에 업로드
+    const { image } = req.body;
+
+    // Cloudinary에 업로드 (추가 보안 옵션)
     const result = await cloudinary.uploader.upload(image, {
       folder: 'foodiemap/profiles',
+      allowed_formats: ['jpg', 'jpeg', 'png', 'gif', 'webp'],
+      max_bytes: 5 * 1024 * 1024,
+      resource_type: 'image',
       transformation: [
         { width: 400, height: 400, crop: 'fill', gravity: 'face' },
         { quality: 'auto:good' }
@@ -538,9 +564,9 @@ router.post('/upload-profile-image', authMiddleware, async (req, res) => {
 
   } catch (error) {
     console.error('이미지 업로드 오류:', error);
-    res.status(500).json({
+    res.status(400).json({
       success: false,
-      message: '이미지 업로드 중 오류가 발생했습니다.'
+      message: '이미지 업로드에 실패했습니다.'
     });
   }
 });
@@ -596,8 +622,8 @@ router.put('/profile',
           });
         }
 
-        // 새 비밀번호 해싱
-        const hashedPassword = await bcrypt.hash(new_password, 10);
+        // 새 비밀번호 해싱 (12 라운드 - 보안 강화)
+        const hashedPassword = await bcrypt.hash(new_password, 12);
         await User.update(userId, { password: hashedPassword });
       }
 

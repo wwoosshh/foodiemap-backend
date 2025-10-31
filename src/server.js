@@ -79,6 +79,23 @@ const verificationLimiter = rateLimit({
   legacyHeaders: false,
 });
 
+// HTTPS 강제 리디렉션 (프로덕션 환경)
+if (process.env.NODE_ENV === 'production') {
+  app.use((req, res, next) => {
+    // Render/Heroku 등의 프록시 환경에서는 x-forwarded-proto 헤더 확인
+    if (req.header('x-forwarded-proto') !== 'https') {
+      return res.redirect(`https://${req.header('host')}${req.url}`);
+    }
+    next();
+  });
+
+  // HSTS (HTTP Strict Transport Security) 헤더 추가
+  app.use((req, res, next) => {
+    res.setHeader('Strict-Transport-Security', 'max-age=31536000; includeSubDomains; preload');
+    next();
+  });
+}
+
 // 미들웨어 설정
 app.use(helmet());
 app.use(compression());
@@ -139,8 +156,13 @@ app.use(cors({
   allowedHeaders: ['Content-Type', 'Authorization'],
   optionsSuccessStatus: 200
 }));
-app.use(express.json({ limit: '10mb' }));
-app.use(express.urlencoded({ extended: true }));
+
+// 기본 요청 크기 제한 (보안 강화)
+app.use(express.json({ limit: '1mb' }));
+app.use(express.urlencoded({ extended: true, limit: '1mb' }));
+
+// 이미지 업로드 경로만 높은 제한 적용
+app.use('/api/auth/upload-profile-image', express.json({ limit: '10mb' }));
 
 // 루트 경로 - Render 헬스체크 대응
 app.get('/', (req, res) => {
@@ -152,8 +174,25 @@ app.get('/', (req, res) => {
   });
 });
 
-// Health check 엔드포인트 (Render 필수)
-app.get('/health', async (req, res) => {
+// Health check 엔드포인트 (Render 필수) - 간단한 버전
+app.get('/health', (req, res) => {
+  res.status(200).json({
+    status: 'OK',
+    timestamp: new Date().toISOString()
+  });
+});
+
+// 상세 헬스 체크 (내부 모니터링용) - API 키 인증 필요
+app.get('/health/detailed', async (req, res) => {
+  // API 키 인증
+  const apiKey = req.header('x-api-key');
+  if (!apiKey || apiKey !== process.env.CLEANUP_API_KEY) {
+    return res.status(401).json({
+      success: false,
+      message: 'Unauthorized'
+    });
+  }
+
   const supabaseConnected = await testSupabaseConnection();
   const cloudinaryConnected = await testCloudinaryConnection();
 

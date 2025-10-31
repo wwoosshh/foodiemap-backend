@@ -189,7 +189,9 @@ router.get('/', [
 
     // 검색 필터 (이름, 주소, 설명)
     if (search) {
-      query = query.or(`name.ilike.%${search}%,address.ilike.%${search}%,description.ilike.%${search}%`);
+      // SQL Injection 방지: 특수 문자 이스케이프
+      const sanitizedSearch = search.replace(/[%_\\]/g, '\\$&');
+      query = query.or(`name.ilike.%${sanitizedSearch}%,address.ilike.%${sanitizedSearch}%,description.ilike.%${sanitizedSearch}%`);
     }
 
     // 정렬

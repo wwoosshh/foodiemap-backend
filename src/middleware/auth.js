@@ -15,10 +15,19 @@ const authMiddleware = async (req, res, next) => {
     const decoded = jwt.verify(token, process.env.JWT_SECRET);
     const user = await User.findById(decoded.userId);
 
+    // 사용자 존재 확인
     if (!user) {
       return res.status(401).json({
         success: false,
         message: '유효하지 않은 토큰입니다.'
+      });
+    }
+
+    // 계정 활성 상태 확인 (보안 강화)
+    if (user.is_active === false) {
+      return res.status(403).json({
+        success: false,
+        message: '비활성화된 계정입니다.'
       });
     }
 

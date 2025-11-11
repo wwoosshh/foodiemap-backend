@@ -86,6 +86,16 @@ router.get('/:id/complete', [
           created_at,
           updated_at,
           helpful_count,
+          taste_rating,
+          quantity_rating,
+          service_rating,
+          atmosphere_rating,
+          cleanliness_rating,
+          visit_date,
+          visit_count,
+          visit_purpose,
+          keyword_tags,
+          menu_tags,
           users:user_id (
             id,
             name,
@@ -125,7 +135,7 @@ router.get('/:id/complete', [
         .from('menus')
         .select('*')
         .eq('restaurant_id', restaurantId)
-        .order('sort_order', { ascending: true }),
+        .order('display_order', { ascending: true }),
 
       // 5. 즐겨찾기 상태 (로그인된 사용자가 있는 경우)
       userId ? supabase

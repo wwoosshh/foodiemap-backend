@@ -147,10 +147,22 @@ router.get('/:id/complete', [
 
       // 6. 맛집 사진 갤러리
       supabase
-        .from('restaurant_photos')
-        .select('*')
+        .from('restaurant_media')
+        .select(`
+          id,
+          category,
+          caption,
+          is_representative,
+          is_featured,
+          display_order,
+          media_files (
+            file_url,
+            thumbnail_url,
+            medium_url,
+            large_url
+          )
+        `)
         .eq('restaurant_id', restaurantId)
-        .eq('is_approved', true)
         .order('display_order', { ascending: true }),
 
       // 7. 맛집 태그
@@ -226,7 +238,17 @@ router.get('/:id/complete', [
     }));
 
     // 맛집 사진 카테고리별 분류
-    const allPhotos = restaurantPhotosResult.data || [];
+    const allPhotos = (restaurantPhotosResult.data || []).map(m => ({
+      id: m.id,
+      category: m.category,
+      caption: m.caption,
+      is_representative: m.is_representative,
+      is_featured: m.is_featured,
+      display_order: m.display_order,
+      url: m.media_files?.large_url || m.media_files?.file_url,
+      thumbnail: m.media_files?.thumbnail_url,
+      medium: m.media_files?.medium_url
+    }));
     const categorizedPhotos = {
       all: allPhotos,
       representative: allPhotos.filter(p => p.is_representative),

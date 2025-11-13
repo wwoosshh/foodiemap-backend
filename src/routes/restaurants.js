@@ -9,7 +9,7 @@ const router = express.Router();
 // 다중 정렬 맛집 목록 조회 (한 번의 요청으로 모든 정렬 방식 반환)
 router.get('/multi-sort', [
   query('limit').optional().isInt({ min: 1, max: 100 }),
-  query('category_id').optional().isInt()
+  query('category_id').optional().isUUID()
 ], async (req, res) => {
   try {
     const errors = validationResult(req);
@@ -22,7 +22,7 @@ router.get('/multi-sort', [
     }
 
     const limit = parseInt(req.query.limit) || 10;
-    const categoryId = req.query.category_id ? parseInt(req.query.category_id) : null;
+    const categoryId = req.query.category_id || null;
 
     // 기본 쿼리 설정
     const baseSelect = `
@@ -30,20 +30,29 @@ router.get('/multi-sort', [
       name,
       description,
       address,
-      phone,
       rating,
       review_count,
       view_count,
       favorite_count,
       latitude,
       longitude,
-      images,
       created_at,
-      categories:category_id (
+      categories (
         id,
         name,
         icon,
         color
+      ),
+      restaurant_contacts (
+        phone
+      ),
+      restaurant_media (
+        id,
+        display_order,
+        media_files (
+          file_url,
+          thumbnail_url
+        )
       )
     `;
 
@@ -130,7 +139,7 @@ router.get('/multi-sort', [
 router.get('/', [
   query('page').optional().isInt({ min: 1 }),
   query('limit').optional().isInt({ min: 1, max: 100 }),
-  query('category_id').optional().isInt(),
+  query('category_id').optional().isUUID(),
   query('search').optional().trim(),
   query('sort').optional().isIn([
     'view_count_desc',
@@ -152,7 +161,7 @@ router.get('/', [
 
     const page = parseInt(req.query.page) || 1;
     const limit = parseInt(req.query.limit) || 20;
-    const categoryId = req.query.category_id ? parseInt(req.query.category_id) : null;
+    const categoryId = req.query.category_id || null;
     const search = req.query.search || null;
     const sort = req.query.sort || 'created_at_desc';
     const offset = (page - 1) * limit;
@@ -165,20 +174,29 @@ router.get('/', [
         name,
         description,
         address,
-        phone,
         rating,
         review_count,
         view_count,
         favorite_count,
         latitude,
         longitude,
-        images,
         created_at,
-        categories:category_id (
+        categories (
           id,
           name,
           icon,
           color
+        ),
+        restaurant_contacts (
+          phone
+        ),
+        restaurant_media (
+          id,
+          display_order,
+          media_files (
+            file_url,
+            thumbnail_url
+          )
         )
       `, { count: 'exact' });
 
@@ -489,7 +507,7 @@ router.post('/', [
   body('address').notEmpty().trim(),
   body('latitude').isFloat({ min: -90, max: 90 }),
   body('longitude').isFloat({ min: -180, max: 180 }),
-  body('category_id').isInt()
+  body('category_id').isUUID()
 ], async (req, res) => {
   try {
     const errors = validationResult(req);

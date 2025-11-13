@@ -9,7 +9,8 @@ router.get('/', async (req, res) => {
     const { data: categories, error } = await supabase
       .from('categories')
       .select('*')
-      .order('id');
+      .eq('is_active', true)
+      .order('display_order', { ascending: true });
 
     if (error) throw error;
 

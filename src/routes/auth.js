@@ -198,7 +198,7 @@ router.post('/login', [
     }
 
     // 소셜 로그인 계정 확인
-    if (user.auth_provider !== 'email' || !user.password) {
+    if (user.auth_provider !== 'email' || !user.password_hash) {
       const providerNames = {
         'email': '이메일',
         'google': 'Google',
@@ -217,7 +217,7 @@ router.post('/login', [
     }
 
     // 비밀번호 확인
-    const isPasswordValid = await User.verifyPassword(password, user.password);
+    const isPasswordValid = await User.verifyPassword(password, user.password_hash);
     if (!isPasswordValid) {
       return res.status(401).json({
         success: false,
@@ -614,7 +614,7 @@ router.put('/profile',
         }
 
         // 현재 비밀번호 검증
-        const isPasswordValid = await User.verifyPassword(current_password, req.user.password);
+        const isPasswordValid = await User.verifyPassword(current_password, req.user.password_hash);
         if (!isPasswordValid) {
           return res.status(401).json({
             success: false,
@@ -624,7 +624,7 @@ router.put('/profile',
 
         // 새 비밀번호 해싱 (12 라운드 - 보안 강화)
         const hashedPassword = await bcrypt.hash(new_password, 12);
-        await User.update(userId, { password: hashedPassword });
+        await User.update(userId, { password_hash: hashedPassword });
       }
 
       // 프로필 정보 업데이트

@@ -12,7 +12,7 @@ class User {
       .from('users')
       .insert([{
         email,
-        password: hashedPassword,
+        password_hash: hashedPassword,
         name,
         phone: phone || null,
         avatar_url: avatar_url || null,
@@ -103,7 +103,7 @@ class User {
         auth_provider,
         social_id,
         social_data: social_data || null,
-        password: null, // 소셜 로그인은 비밀번호 불필요
+        password_hash: null, // 소셜 로그인은 비밀번호 불필요
         email_verified: true, // 소셜 계정은 이미 인증됨
         email_verified_at: new Date().toISOString(),
         created_at: new Date().toISOString(),

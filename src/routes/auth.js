@@ -181,11 +181,14 @@ router.post('/login', [
     // 사용자 찾기
     const user = await User.findByEmail(email);
     if (!user) {
+      console.log('❌ 로그인 실패: 사용자를 찾을 수 없음 -', email);
       return res.status(401).json({
         success: false,
         message: '이메일 또는 비밀번호가 올바르지 않습니다.'
       });
     }
+
+    console.log('✅ 사용자 찾음:', email, 'auth_provider:', user.auth_provider, 'has_password_hash:', !!user.password_hash);
 
     // 탈퇴 대기 중인 계정 확인
     if (user.is_active === false) {
@@ -219,11 +222,14 @@ router.post('/login', [
     // 비밀번호 확인
     const isPasswordValid = await User.verifyPassword(password, user.password_hash);
     if (!isPasswordValid) {
+      console.log('❌ 로그인 실패: 비밀번호 불일치 -', email);
       return res.status(401).json({
         success: false,
         message: '이메일 또는 비밀번호가 올바르지 않습니다.'
       });
     }
+
+    console.log('✅ 로그인 성공:', email);
 
     // JWT 토큰 생성
     const token = generateToken(user.id);

@@ -13,6 +13,7 @@ class User {
       .insert([{
         email,
         password_hash: hashedPassword,
+        auth_provider: 'email',
         name,
         phone: phone || null,
         avatar_url: avatar_url || null,

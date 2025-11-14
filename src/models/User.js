@@ -7,9 +7,11 @@ class User {
 
     // 비밀번호 해시화 (12 라운드 - 보안 강화)
     console.log('🔐 회원가입 비밀번호 해싱');
+    console.log('  원본 비밀번호:', password);
     console.log('  원본 비밀번호 길이:', password.length);
     const hashedPassword = await bcrypt.hash(password, 12);
-    console.log('  생성된 해시 앞 20자:', hashedPassword.substring(0, 20));
+    console.log('  생성된 해시 전체:', hashedPassword);
+    console.log('  생성된 해시 길이:', hashedPassword.length);
 
     const { data, error } = await supabase
       .from('users')

@@ -220,6 +220,10 @@ router.post('/login', [
     }
 
     // 비밀번호 확인
+    console.log('🔐 비밀번호 검증 시작');
+    console.log('  입력된 비밀번호 길이:', password.length);
+    console.log('  저장된 해시 앞 20자:', user.password_hash?.substring(0, 20));
+
     const isPasswordValid = await User.verifyPassword(password, user.password_hash);
     if (!isPasswordValid) {
       console.log('❌ 로그인 실패: 비밀번호 불일치 -', email);

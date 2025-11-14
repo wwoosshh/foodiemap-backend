@@ -91,7 +91,7 @@ class User {
 
   // 소셜 로그인 사용자 생성
   static async createSocialUser(userData) {
-    const { email, name, phone, avatar_url, auth_provider, social_id, social_data } = userData;
+    const { email, name, phone, avatar_url, auth_provider, social_id } = userData;
 
     const { data, error } = await supabase
       .from('users')
@@ -102,7 +102,6 @@ class User {
         avatar_url: avatar_url || null,
         auth_provider,
         social_id,
-        social_data: social_data || null,
         password_hash: null, // 소셜 로그인은 비밀번호 불필요
         email_verified: true, // 소셜 계정은 이미 인증됨
         email_verified_at: new Date().toISOString(),

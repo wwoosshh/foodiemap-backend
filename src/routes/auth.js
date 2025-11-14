@@ -331,8 +331,7 @@ router.post('/social-login', [
         phone,
         avatar_url: secureAvatarUrl,
         auth_provider,
-        social_id,
-        social_data
+        social_id
       });
       console.log('✅ 새 소셜 사용자 생성 완료:', user.id);
     }

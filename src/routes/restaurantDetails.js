@@ -112,7 +112,7 @@ router.get('/:id/complete', [
           )
         `)
         .eq('restaurant_id', restaurantId)
-        .eq('is_deleted', false)
+        .is('deleted_at', null)
         .order('created_at', { ascending: false })
         .limit(10),
 
@@ -399,7 +399,7 @@ async function calculateReviewStats(restaurantId) {
       .from('restaurant_reviews')
       .select('rating')
       .eq('restaurant_id', restaurantId)
-      .eq('is_deleted', false);
+      .is('deleted_at', null);
 
     if (error) {
       console.error('리뷰 통계 계산 오류:', error);
@@ -495,7 +495,7 @@ router.get('/:id/reviews/more', [
           )
         `)
         .eq('restaurant_id', restaurantId)
-        .eq('is_deleted', false)
+        .is('deleted_at', null)
         .order('created_at', { ascending: false })
         .range(offset, offset + limit - 1),
 
@@ -580,7 +580,7 @@ router.get('/:id/comments/more', [
       .from('restaurant_reviews')
       .select('id')
       .eq('restaurant_id', restaurantId)
-      .eq('is_deleted', false);
+      .is('deleted_at', null);
 
     if (reviewError || !reviews || reviews.length === 0) {
       return res.json({

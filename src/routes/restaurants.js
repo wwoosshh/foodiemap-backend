@@ -451,6 +451,51 @@ router.get('/:id/favorite/status', authMiddleware, async (req, res) => {
   }
 });
 
+// 즐겨찾기 메모 수정
+router.patch('/favorites/:favoriteId/memo', authMiddleware, async (req, res) => {
+  try {
+    const { favoriteId } = req.params;
+    const { memo } = req.body;
+    const userId = req.user.id;
+
+    // 소유권 확인 및 메모 업데이트
+    const { data, error } = await supabase
+      .from('user_favorites')
+      .update({ memo, updated_at: new Date().toISOString() })
+      .eq('id', favoriteId)
+      .eq('user_id', userId)
+      .select()
+      .single();
+
+    if (error) {
+      return res.status(500).json({
+        success: false,
+        message: '메모 수정 중 오류가 발생했습니다.'
+      });
+    }
+
+    if (!data) {
+      return res.status(404).json({
+        success: false,
+        message: '즐겨찾기를 찾을 수 없습니다.'
+      });
+    }
+
+    res.json({
+      success: true,
+      message: '메모가 수정되었습니다.',
+      data
+    });
+
+  } catch (error) {
+    console.error('메모 수정 오류:', error);
+    res.status(500).json({
+      success: false,
+      message: '서버 오류가 발생했습니다.'
+    });
+  }
+});
+
 // 주변 맛집 검색
 router.get('/nearby/search', [
   query('lat').isFloat({ min: -90, max: 90 }),

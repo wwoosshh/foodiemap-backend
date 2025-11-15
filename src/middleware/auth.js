@@ -74,4 +74,5 @@ const optionalAuthMiddleware = async (req, res, next) => {
 };
 
 module.exports = authMiddleware;
+module.exports.requireAuth = authMiddleware;
 module.exports.optionalAuth = optionalAuthMiddleware;

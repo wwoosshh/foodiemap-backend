@@ -49,6 +49,10 @@ router.get('/:id/complete', [
     // 병렬로 모든 관련 데이터 가져오기
     const [
       restaurantResult,
+      contactsResult,
+      facilitiesResult,
+      operationsResult,
+      servicesResult,
       reviewsResult,
       commentsResult,
       menuResult,
@@ -72,7 +76,35 @@ router.get('/:id/complete', [
         .eq('id', restaurantId)
         .single(),
 
-      // 2. 리뷰 목록 (최신순, 페이지네이션 고려해서 처음 10개)
+      // 2. 연락처 정보
+      supabase
+        .from('restaurant_contacts')
+        .select('*')
+        .eq('restaurant_id', restaurantId)
+        .maybeSingle(),
+
+      // 3. 시설 정보
+      supabase
+        .from('restaurant_facilities')
+        .select('*')
+        .eq('restaurant_id', restaurantId)
+        .maybeSingle(),
+
+      // 4. 운영 정보
+      supabase
+        .from('restaurant_operations')
+        .select('*')
+        .eq('restaurant_id', restaurantId)
+        .maybeSingle(),
+
+      // 5. 서비스 정보
+      supabase
+        .from('restaurant_services')
+        .select('*')
+        .eq('restaurant_id', restaurantId)
+        .maybeSingle(),
+
+      // 6. 리뷰 목록 (최신순, 페이지네이션 고려해서 처음 10개)
       supabase
         .from('restaurant_reviews')
         .select(`
@@ -309,6 +341,18 @@ router.get('/:id/complete', [
     const responseData = {
       // 맛집 기본 정보
       restaurant: restaurantResult.data,
+
+      // 연락처 정보
+      contacts: contactsResult.data || {},
+
+      // 시설 정보
+      facilities: facilitiesResult.data || {},
+
+      // 운영 정보
+      operations: operationsResult.data || {},
+
+      // 서비스 정보
+      services: servicesResult.data || {},
 
       // 리뷰 관련
       reviews: {

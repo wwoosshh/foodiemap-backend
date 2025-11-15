@@ -230,6 +230,7 @@ app.use('/api/auth/register', registerLimiter);
 app.use('/api/auth/social', authLimiter); // 소셜 로그인도 제한
 app.use('/api/auth', authRoutes);
 
+app.use('/api/restaurants', restaurantRoutes);
 app.use('/api/categories', categoryRoutes);
 
 // 이메일 인증 엔드포인트
@@ -238,8 +239,7 @@ app.use('/api/verification', verificationLimiter, verificationRoutes);
 app.use('/api/banners', bannerRoutes);
 app.use('/api/reviews', reviewRoutes);
 app.use('/api/home', homeRoutes);
-app.use('/api/restaurants', restaurantDetailRoutes);
-app.use('/api/restaurants', restaurantRoutes);
+app.use('/api/restaurant-details', restaurantDetailRoutes);
 app.use('/api/events', eventRoutes);
 app.use('/api/preferences', preferencesRoutes);
 

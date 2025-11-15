@@ -10,7 +10,7 @@ router.get('/', async (req, res) => {
       .from('banners')
       .select('*')
       .eq('is_active', true)
-      .order('sort_order', { ascending: true })
+      .order('display_order', { ascending: true })
       .order('created_at', { ascending: false });
 
     if (error) {

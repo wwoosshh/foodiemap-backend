@@ -15,7 +15,7 @@ router.get('/data', async (req, res) => {
         .from('banners')
         .select('*')
         .eq('is_active', true)
-        .order('sort_order', { ascending: true }),
+        .order('display_order', { ascending: true }),
 
       // 카테고리 조회
       supabase

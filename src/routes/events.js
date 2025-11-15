@@ -78,7 +78,7 @@ router.get('/',
         .select('*', { count: 'exact' })
         .eq('is_active', true)
         .or(`end_date.is.null,end_date.gte.${new Date().toISOString()}`)
-        .order('sort_order', { ascending: true })
+        .order('display_order', { ascending: true })
         .order('created_at', { ascending: false })
         .range(offset, offset + limit - 1);
 

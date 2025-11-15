@@ -369,7 +369,7 @@ router.post('/',
           created_at,
           updated_at,
           helpful_count,
-          users:user_id (
+          users!user_id (
             name,
             avatar_url
           )
@@ -477,11 +477,12 @@ router.put('/:reviewId',
       const { rating, title, content, images, tags, is_anonymous } = req.body;
       const user_id = req.user.id;
 
-      // 리뷰 소유권 확인
+      // 리뷰 소유권 확인 (삭제되지 않은 리뷰만)
       const { data: existingReview, error: reviewError } = await supabaseAdmin
         .from('restaurant_reviews')
         .select('id, user_id')
         .eq('id', reviewId)
+        .is('deleted_at', null)
         .single();
 
       if (reviewError || !existingReview) {
@@ -492,17 +493,17 @@ router.put('/:reviewId',
         return errorResponse(res, 403, '리뷰를 수정할 권한이 없습니다');
       }
 
-      // 리뷰 수정
+      // 리뷰 수정 데이터 준비
       const updateData = {
-        rating,
+        rating: parseInt(rating),
         title: title.trim(),
         content: content.trim(),
         updated_at: new Date().toISOString()
       };
 
       // is_anonymous가 명시적으로 전달된 경우에만 업데이트
-      if (is_anonymous !== undefined) {
-        updateData.is_anonymous = is_anonymous;
+      if (is_anonymous !== undefined && is_anonymous !== null) {
+        updateData.is_anonymous = Boolean(is_anonymous);
       }
 
       const { data: updatedReview, error: updateError } = await supabaseAdmin
@@ -707,11 +708,12 @@ router.delete('/:reviewId',
       const { reviewId } = req.params;
       const user_id = req.user.id;
 
-      // 리뷰 소유권 확인
+      // 리뷰 소유권 확인 (이미 삭제되지 않은 리뷰만)
       const { data: review, error: reviewError } = await supabaseAdmin
         .from('restaurant_reviews')
         .select('id, user_id')
         .eq('id', reviewId)
+        .is('deleted_at', null)
         .single();
 
       if (reviewError || !review) {
@@ -726,7 +728,8 @@ router.delete('/:reviewId',
       const { error: deleteError } = await supabaseAdmin
         .from('restaurant_reviews')
         .update({ deleted_at: new Date().toISOString() })
-        .eq('id', reviewId);
+        .eq('id', reviewId)
+        .is('deleted_at', null);
 
       if (deleteError) {
         return errorResponse(res, 500, '리뷰 삭제 중 오류가 발생했습니다', deleteError.message);

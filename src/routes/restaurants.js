@@ -572,6 +572,110 @@ router.patch('/favorites/:favoriteId/folder', authMiddleware, async (req, res) =
   }
 });
 
+// 폴더 목록 조회
+router.get('/favorites/folders', authMiddleware, async (req, res) => {
+  try {
+    const userId = req.user.id;
+
+    const { data, error } = await supabase
+      .from('favorite_folders')
+      .select('*')
+      .eq('user_id', userId)
+      .order('display_order', { ascending: true })
+      .order('created_at', { ascending: true });
+
+    if (error) {
+      return res.status(500).json({
+        success: false,
+        message: '폴더 목록 조회 중 오류가 발생했습니다.'
+      });
+    }
+
+    res.json({
+      success: true,
+      data: {
+        folders: data || []
+      }
+    });
+
+  } catch (error) {
+    console.error('폴더 목록 조회 오류:', error);
+    res.status(500).json({
+      success: false,
+      message: '서버 오류가 발생했습니다.'
+    });
+  }
+});
+
+// 폴더 생성
+router.post('/favorites/folders', [
+  body('folder_name').notEmpty().trim()
+], authMiddleware, async (req, res) => {
+  try {
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) {
+      return res.status(400).json({
+        success: false,
+        message: '폴더 이름이 필요합니다.',
+        errors: errors.array()
+      });
+    }
+
+    const { folder_name, description } = req.body;
+    const userId = req.user.id;
+
+    // 중복 폴더명 확인
+    const { data: existingFolder } = await supabase
+      .from('favorite_folders')
+      .select('id')
+      .eq('user_id', userId)
+      .eq('folder_name', folder_name)
+      .single();
+
+    if (existingFolder) {
+      return res.status(400).json({
+        success: false,
+        message: '이미 존재하는 폴더 이름입니다.'
+      });
+    }
+
+    // 폴더 생성
+    const { data, error } = await supabase
+      .from('favorite_folders')
+      .insert([{
+        user_id: userId,
+        folder_name,
+        description: description || null,
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString()
+      }])
+      .select()
+      .single();
+
+    if (error) {
+      return res.status(500).json({
+        success: false,
+        message: '폴더 생성 중 오류가 발생했습니다.'
+      });
+    }
+
+    res.status(201).json({
+      success: true,
+      message: `"${folder_name}" 폴더가 생성되었습니다.`,
+      data: {
+        folder: data
+      }
+    });
+
+  } catch (error) {
+    console.error('폴더 생성 오류:', error);
+    res.status(500).json({
+      success: false,
+      message: '서버 오류가 발생했습니다.'
+    });
+  }
+});
+
 // 폴더명 일괄 변경 (폴더 이름 수정)
 router.patch('/favorites/folders/rename', authMiddleware, async (req, res) => {
   try {
@@ -593,7 +697,36 @@ router.patch('/favorites/folders/rename', authMiddleware, async (req, res) => {
       });
     }
 
-    // 해당 폴더의 모든 즐겨찾기 업데이트
+    // 새 폴더명 중복 확인
+    const { data: existingFolder } = await supabase
+      .from('favorite_folders')
+      .select('id')
+      .eq('user_id', userId)
+      .eq('folder_name', new_name)
+      .single();
+
+    if (existingFolder) {
+      return res.status(400).json({
+        success: false,
+        message: '이미 존재하는 폴더 이름입니다.'
+      });
+    }
+
+    // 1. favorite_folders 테이블에서 폴더명 업데이트
+    const { error: folderError } = await supabase
+      .from('favorite_folders')
+      .update({ folder_name: new_name, updated_at: new Date().toISOString() })
+      .eq('user_id', userId)
+      .eq('folder_name', old_name);
+
+    if (folderError) {
+      return res.status(500).json({
+        success: false,
+        message: '폴더명 변경 중 오류가 발생했습니다.'
+      });
+    }
+
+    // 2. 해당 폴더의 모든 즐겨찾기 업데이트
     const { data, error } = await supabase
       .from('user_favorites')
       .update({ folder_name: new_name, updated_at: new Date().toISOString() })
@@ -631,7 +764,7 @@ router.delete('/favorites/folders/:folderName', authMiddleware, async (req, res)
     const { folderName } = req.params;
     const userId = req.user.id;
 
-    // 해당 폴더의 모든 즐겨찾기를 미분류(null)로 변경
+    // 1. 해당 폴더의 모든 즐겨찾기를 미분류(null)로 변경
     const { data, error } = await supabase
       .from('user_favorites')
       .update({ folder_name: null, updated_at: new Date().toISOString() })
@@ -644,6 +777,18 @@ router.delete('/favorites/folders/:folderName', authMiddleware, async (req, res)
         success: false,
         message: '폴더 삭제 중 오류가 발생했습니다.'
       });
+    }
+
+    // 2. favorite_folders 테이블에서 폴더 삭제
+    const { error: folderError } = await supabase
+      .from('favorite_folders')
+      .delete()
+      .eq('user_id', userId)
+      .eq('folder_name', folderName);
+
+    if (folderError) {
+      console.error('폴더 테이블 삭제 오류:', folderError);
+      // 즐겨찾기 이동은 성공했으므로 경고만 출력
     }
 
     res.json({

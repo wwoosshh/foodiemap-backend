@@ -75,7 +75,15 @@ router.get('/:id/complete', [
       // 2. 리뷰 목록 (최신순, 페이지네이션 고려해서 처음 10개)
       supabase
         .from('restaurant_reviews')
-        .select('*')
+        .select(`
+          *,
+          users!user_id(id, name, avatar_url),
+          review_media(
+            media_id,
+            display_order,
+            media_files(id, file_url, thumbnail_url, medium_url)
+          )
+        `)
         .eq('restaurant_id', restaurantId)
         .is('deleted_at', null)
         .order('created_at', { ascending: false })
@@ -228,7 +236,7 @@ router.get('/:id/complete', [
       created_at: review.created_at,
       updated_at: review.updated_at,
       helpful_count: review.helpful_count || 0,
-      user_helpful: helpfulReviewIds.has(review.id), // 추가
+      user_helpful: helpfulReviewIds.has(review.id),
       tags: []
     }));
 
@@ -434,29 +442,12 @@ router.get('/:id/reviews/more', [
       supabase
         .from('restaurant_reviews')
         .select(`
-          id,
-          user_id,
-          rating,
-          title,
-          content,
-          is_anonymous,
-          created_at,
-          updated_at,
-          helpful_count,
-          users:user_id (
-            id,
-            name,
-            avatar_url
-          ),
-          review_media (
+          *,
+          users!user_id(id, name, avatar_url),
+          review_media(
             media_id,
             display_order,
-            media_files (
-              id,
-              file_url,
-              thumbnail_url,
-              medium_url
-            )
+            media_files(id, file_url, thumbnail_url, medium_url)
           )
         `)
         .eq('restaurant_id', restaurantId)

@@ -831,54 +831,82 @@ router.post('/:reviewId/report',
       const { reason, details } = req.body;
       const user_id = req.user.id;
 
+      console.log('=== 리뷰 신고 시작 ===');
+      console.log('reviewId:', reviewId);
+      console.log('user_id:', user_id);
+      console.log('reason:', reason);
+
       // 리뷰 존재 확인
+      console.log('1. 리뷰 존재 확인 중...');
       const { data: review, error: reviewError } = await supabaseAdmin
         .from('restaurant_reviews')
         .select('id, user_id')
         .eq('id', reviewId)
         .single();
 
-      if (reviewError || !review) {
+      if (reviewError) {
+        console.error('리뷰 조회 에러:', reviewError);
+        return errorResponse(res, 404, '리뷰를 찾을 수 없습니다', reviewError.message);
+      }
+
+      if (!review) {
+        console.error('리뷰 없음');
         return errorResponse(res, 404, '리뷰를 찾을 수 없습니다');
       }
 
+      console.log('리뷰 찾음:', review);
+
       // 자신의 리뷰는 신고할 수 없음
       if (review.user_id === user_id) {
+        console.log('본인 리뷰 신고 시도');
         return errorResponse(res, 400, '본인의 리뷰는 신고할 수 없습니다');
       }
 
       // 중복 신고 확인
-      const { data: existingReport } = await supabaseAdmin
+      console.log('2. 중복 신고 확인 중...');
+      const { data: existingReport, error: checkError } = await supabaseAdmin
         .from('review_reports')
         .select('id')
         .eq('review_id', reviewId)
         .eq('reporter_id', user_id)
         .single();
 
+      if (checkError && checkError.code !== 'PGRST116') {
+        console.error('중복 확인 에러:', checkError);
+      }
+
       if (existingReport) {
+        console.log('이미 신고한 리뷰');
         return errorResponse(res, 409, '이미 신고한 리뷰입니다');
       }
 
-      // 신고 추가 (created_at은 DB DEFAULT 사용)
+      // 신고 추가
+      console.log('3. 신고 추가 중...');
+      const insertData = {
+        review_id: reviewId,
+        reporter_id: user_id,
+        reason: reason.trim(),
+        details: details?.trim() || null
+      };
+      console.log('Insert data:', JSON.stringify(insertData));
+
       const { data: report, error: reportError } = await supabaseAdmin
         .from('review_reports')
-        .insert({
-          review_id: reviewId,
-          reporter_id: user_id,
-          reason: reason.trim(),
-          details: details?.trim() || null
-        })
+        .insert(insertData)
         .select('id')
         .single();
 
       if (reportError) {
-        console.error('신고 추가 에러:', reportError);
+        console.error('=== 신고 추가 에러 상세 ===');
+        console.error('Error code:', reportError.code);
+        console.error('Error message:', reportError.message);
+        console.error('Error details:', reportError.details);
+        console.error('Error hint:', reportError.hint);
+        console.error('Full error:', JSON.stringify(reportError, null, 2));
         return errorResponse(res, 500, '신고 처리 중 오류가 발생했습니다', reportError.message);
       }
 
-      // 트리거가 자동으로 report_count를 업데이트하므로 수동 업데이트 불필요
-      // update_review_report_count() 트리거가 처리함
-
+      console.log('신고 성공:', report);
       return successResponse(res, { report_id: report.id }, '리뷰가 신고되었습니다');
 
     } catch (error) {

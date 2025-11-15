@@ -316,14 +316,14 @@ router.get('/:restaurantId/stats',
 router.post('/',
   [
     body('restaurant_id').isUUID().withMessage('유효한 맛집 ID가 아닙니다'),
-    body('rating').isInt({ min: 1, max: 5 }).toInt().withMessage('평점은 1-5 사이의 정수여야 합니다'),
+    body('rating').isInt({ min: 1, max: 5 }).withMessage('평점은 1-5 사이의 정수여야 합니다').toInt(),
     body('title').trim().isLength({ min: 1, max: 100 }).withMessage('제목은 1-100자여야 합니다'),
     body('content').trim().isLength({ min: 10, max: 2000 }).withMessage('내용은 10-2000자여야 합니다'),
     body('images').optional().isArray().withMessage('이미지는 배열이어야 합니다'),
     body('images.*').optional().isURL().withMessage('이미지 URL 형식이 올바르지 않습니다'),
     body('tags').optional().isArray().withMessage('태그는 배열이어야 합니다'),
     body('tags.*').optional().isString().withMessage('태그는 문자열이어야 합니다'),
-    body('is_anonymous').optional().toBoolean().withMessage('익명 여부는 boolean이어야 합니다')
+    body('is_anonymous').optional().isBoolean().withMessage('익명 여부는 boolean이어야 합니다').toBoolean()
   ],
   requireAuth,
   async (req, res) => {
@@ -458,12 +458,12 @@ router.post('/',
 router.put('/:reviewId',
   [
     param('reviewId').isUUID().withMessage('유효한 리뷰 ID가 아닙니다'),
-    body('rating').isInt({ min: 1, max: 5 }).toInt().withMessage('평점은 1-5 사이의 정수여야 합니다'),
+    body('rating').isInt({ min: 1, max: 5 }).withMessage('평점은 1-5 사이의 정수여야 합니다').toInt(),
     body('title').trim().isLength({ min: 1, max: 100 }).withMessage('제목은 1-100자여야 합니다'),
     body('content').trim().isLength({ min: 10, max: 2000 }).withMessage('내용은 10-2000자여야 합니다'),
     body('images').optional().isArray().withMessage('이미지는 배열이어야 합니다'),
     body('tags').optional().isArray().withMessage('태그는 배열이어야 합니다'),
-    body('is_anonymous').optional().toBoolean().withMessage('익명 여부는 boolean이어야 합니다')
+    body('is_anonymous').optional().isBoolean().withMessage('익명 여부는 boolean이어야 합니다').toBoolean()
   ],
   requireAuth,
   async (req, res) => {

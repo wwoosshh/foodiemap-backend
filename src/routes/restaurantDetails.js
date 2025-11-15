@@ -163,8 +163,6 @@ router.get('/:id/complete', [
           portion_size,
           calories,
           is_available,
-          sold_out,
-          order_count,
           view_count,
           display_order,
           created_at,

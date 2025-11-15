@@ -841,7 +841,7 @@ router.get('/user/my',
         .from('restaurant_reviews')
         .select('*', { count: 'exact', head: true })
         .eq('user_id', user_id)
-        .eq('is_deleted', false);
+        .is('deleted_at', null);
 
       if (countError) {
         return errorResponse(res, 500, '리뷰 개수 조회에 실패했습니다', countError.message);
@@ -858,8 +858,6 @@ router.get('/user/my',
             description,
             address,
             road_address,
-            phone,
-            images,
             rating,
             review_count,
             price_range,
@@ -877,7 +875,7 @@ router.get('/user/my',
           )
         `)
         .eq('user_id', user_id)
-        .eq('is_deleted', false)
+        .is('deleted_at', null)
         .order('created_at', { ascending: false })
         .range(offset, offset + limit - 1);
 

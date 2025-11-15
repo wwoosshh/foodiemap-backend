@@ -121,47 +121,71 @@ class User {
     return data;
   }
 
-  // 회원 탈퇴 요청
+  // 회원 탈퇴 요청 (간소화 버전 - 새 DB 스키마에 맞춤)
   static async requestDeletion(userId, reason = null) {
+    // deleted_at을 현재 시각으로 설정
     const { data, error } = await supabase
-      .rpc('request_account_deletion', {
-        user_id: userId,
-        reason: reason
-      });
+      .from('users')
+      .update({
+        deleted_at: new Date().toISOString(),
+        is_active: false
+      })
+      .eq('id', userId)
+      .select()
+      .single();
 
     if (error) throw error;
-    return data;
+
+    return {
+      message: '회원 탈퇴가 완료되었습니다.',
+      deletion_scheduled_at: data.deleted_at,
+      deletion_deadline: data.deleted_at
+    };
   }
 
   // 계정 복구
   static async recoverAccount(userId) {
     const { data, error } = await supabase
-      .rpc('recover_account', {
-        user_id: userId
-      });
+      .from('users')
+      .update({
+        deleted_at: null,
+        is_active: true
+      })
+      .eq('id', userId)
+      .select()
+      .single();
 
     if (error) throw error;
-    return data;
+    return { message: '계정이 복구되었습니다.' };
   }
 
   // 탈퇴 상태 조회
   static async getDeletionStatus(userId) {
     const { data, error } = await supabase
-      .rpc('get_deletion_status', {
-        user_id: userId
-      });
+      .from('users')
+      .select('deleted_at, is_active')
+      .eq('id', userId)
+      .single();
 
     if (error) throw error;
-    return data;
+
+    const isDeletionScheduled = !!data.deleted_at;
+
+    return {
+      is_deletion_scheduled: isDeletionScheduled,
+      is_active: data.is_active,
+      deletion_scheduled_at: data.deleted_at,
+      deletion_deadline: data.deleted_at,
+      days_remaining: 0,
+      can_recover: isDeletionScheduled,
+      message: isDeletionScheduled ? '탈퇴 요청된 계정입니다.' : '정상 계정입니다.'
+    };
   }
 
-  // 만료된 계정 삭제 (관리자용 또는 크론잡용)
+  // 만료된 계정 삭제 (비활성화)
   static async deleteExpiredAccounts() {
-    const { data, error } = await supabase
-      .rpc('delete_expired_accounts');
-
-    if (error) throw error;
-    return data;
+    // 새 DB에서는 soft delete만 지원
+    return 0;
   }
 }
 

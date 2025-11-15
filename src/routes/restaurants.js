@@ -49,6 +49,7 @@ router.get('/multi-sort', [
       restaurant_media (
         id,
         display_order,
+        is_representative,
         media_files (
           file_url,
           thumbnail_url
@@ -111,14 +112,30 @@ router.get('/multi-sort', [
       console.error('최신순 조회 실패:', byLatest.error);
     }
 
+    // 레스토랑 데이터 변환 함수
+    const transformRestaurants = (restaurants) => {
+      return (restaurants || []).map(restaurant => {
+        // 대표 이미지 추출
+        const representativeMedia = restaurant.restaurant_media?.find(m => m.is_representative);
+        const images = representativeMedia?.media_files?.file_url
+          ? [representativeMedia.media_files.file_url]
+          : [];
+
+        return {
+          ...restaurant,
+          images
+        };
+      });
+    };
+
     res.json({
       success: true,
       data: {
-        byRating: byRating.data || [],
-        byReviewCount: byReviewCount.data || [],
-        byViewCount: byViewCount.data || [],
-        byFavoriteCount: byFavoriteCount.data || [],
-        byLatest: byLatest.data || [],
+        byRating: transformRestaurants(byRating.data),
+        byReviewCount: transformRestaurants(byReviewCount.data),
+        byViewCount: transformRestaurants(byViewCount.data),
+        byFavoriteCount: transformRestaurants(byFavoriteCount.data),
+        byLatest: transformRestaurants(byLatest.data),
         filters: {
           limit,
           categoryId
@@ -193,6 +210,7 @@ router.get('/', [
         restaurant_media (
           id,
           display_order,
+          is_representative,
           media_files (
             file_url,
             thumbnail_url
@@ -249,10 +267,23 @@ router.get('/', [
 
     const totalPages = count ? Math.ceil(count / limit) : 0;
 
+    // 레스토랑 데이터 변환 (대표 이미지 추출)
+    const transformedRestaurants = (restaurants || []).map(restaurant => {
+      const representativeMedia = restaurant.restaurant_media?.find(m => m.is_representative);
+      const images = representativeMedia?.media_files?.file_url
+        ? [representativeMedia.media_files.file_url]
+        : [];
+
+      return {
+        ...restaurant,
+        images
+      };
+    });
+
     res.json({
       success: true,
       data: {
-        restaurants: restaurants || [],
+        restaurants: transformedRestaurants,
         pagination: {
           page,
           limit,
@@ -660,10 +691,13 @@ router.get('/nearby/search', [
       limit
     );
 
+    // 썸네일 이미지 변환 (대표 이미지만 추출)
+    const transformedRestaurants = transformRestaurants(restaurants);
+
     res.json({
       success: true,
       data: {
-        restaurants,
+        restaurants: transformedRestaurants,
         search: {
           latitude: parseFloat(lat),
           longitude: parseFloat(lng),

@@ -650,6 +650,7 @@ class Restaurant {
           restaurant_media (
             id,
             display_order,
+            is_representative,
             media_files (
               file_url,
               thumbnail_url
@@ -662,16 +663,18 @@ class Restaurant {
 
     if (error) throw error;
 
-    // 이미지 배열로 변환
+    // 이미지 배열로 변환 (대표 이미지만 추출)
     return data.map(fav => ({
       ...fav,
       restaurant: {
         ...fav.restaurant,
         phone: fav.restaurant.restaurant_contacts?.phone,
-        images: fav.restaurant.restaurant_media
-          ?.sort((a, b) => a.display_order - b.display_order)
-          .map(m => m.media_files?.file_url || m.media_files?.thumbnail_url)
-          .filter(Boolean) || []
+        images: (() => {
+          const representativeMedia = fav.restaurant.restaurant_media?.find(m => m.is_representative);
+          return representativeMedia?.media_files?.file_url
+            ? [representativeMedia.media_files.file_url]
+            : [];
+        })()
       }
     }));
   }

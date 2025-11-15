@@ -187,6 +187,16 @@ router.get('/:restaurantId',
           ),
           review_helpful:review_helpful!left (
             id
+          ),
+          review_media (
+            media_id,
+            display_order,
+            media_files (
+              id,
+              file_url,
+              thumbnail_url,
+              medium_url
+            )
           )
         `)
         .eq('restaurant_id', restaurantId)
@@ -212,7 +222,9 @@ router.get('/:restaurantId',
         rating: review.rating,
         title: review.title,
         content: review.content,
-        images: [],
+        images: (review.review_media || [])
+          .sort((a, b) => a.display_order - b.display_order)
+          .map(rm => rm.media_files?.file_url || rm.media_files?.medium_url || ''),
         tags: [],
         is_anonymous: review.is_anonymous,
         created_at: review.created_at,
@@ -368,6 +380,48 @@ router.post('/',
         return errorResponse(res, 500, '리뷰 작성 중 오류가 발생했습니다', error.message);
       }
 
+      // 이미지가 있으면 media_files와 review_media에 저장
+      const savedImages = [];
+      if (images && images.length > 0) {
+        for (let i = 0; i < images.length; i++) {
+          try {
+            // 1. media_files에 이미지 저장
+            const { data: mediaFile, error: mediaError } = await supabaseAdmin
+              .from('media_files')
+              .insert({
+                file_url: images[i],
+                media_type: 'image',
+                uploaded_by: user_id
+              })
+              .select('id, file_url, thumbnail_url')
+              .single();
+
+            if (mediaError) {
+              console.error('미디어 파일 저장 오류:', mediaError);
+              continue;
+            }
+
+            // 2. review_media에 연결
+            const { error: linkError } = await supabaseAdmin
+              .from('review_media')
+              .insert({
+                review_id: review.id,
+                media_id: mediaFile.id,
+                display_order: i
+              });
+
+            if (linkError) {
+              console.error('리뷰 미디어 연결 오류:', linkError);
+              continue;
+            }
+
+            savedImages.push(mediaFile.file_url);
+          } catch (imgError) {
+            console.error('이미지 처리 오류:', imgError);
+          }
+        }
+      }
+
       const responseReview = {
         id: review.id,
         user_id: review.user_id,
@@ -376,7 +430,7 @@ router.post('/',
         rating: review.rating,
         title: review.title,
         content: review.content,
-        images: [],
+        images: savedImages,
         tags: [],
         is_anonymous: review.is_anonymous,
         created_at: review.created_at,
@@ -461,7 +515,6 @@ router.put('/:reviewId',
           rating,
           title,
           content,
-          review_images,
           is_anonymous,
           created_at,
           updated_at,
@@ -469,12 +522,72 @@ router.put('/:reviewId',
           users:user_id (
             name,
             avatar_url
+          ),
+          review_media (
+            media_id,
+            display_order,
+            media_files (
+              id,
+              file_url,
+              thumbnail_url
+            )
           )
         `)
         .single();
 
       if (updateError) {
         return errorResponse(res, 500, '리뷰 수정 중 오류가 발생했습니다', updateError.message);
+      }
+
+      // 이미지가 제공된 경우 기존 이미지 삭제 후 새로 추가
+      let savedImages = (updatedReview.review_media || [])
+        .sort((a, b) => a.display_order - b.display_order)
+        .map(rm => rm.media_files?.file_url || '');
+
+      if (images && images.length > 0) {
+        // 기존 review_media 연결 삭제
+        await supabaseAdmin
+          .from('review_media')
+          .delete()
+          .eq('review_id', reviewId);
+
+        // 새 이미지 저장
+        savedImages = [];
+        for (let i = 0; i < images.length; i++) {
+          try {
+            const { data: mediaFile, error: mediaError } = await supabaseAdmin
+              .from('media_files')
+              .insert({
+                file_url: images[i],
+                media_type: 'image',
+                uploaded_by: user_id
+              })
+              .select('id, file_url')
+              .single();
+
+            if (mediaError) {
+              console.error('미디어 파일 저장 오류:', mediaError);
+              continue;
+            }
+
+            const { error: linkError } = await supabaseAdmin
+              .from('review_media')
+              .insert({
+                review_id: reviewId,
+                media_id: mediaFile.id,
+                display_order: i
+              });
+
+            if (linkError) {
+              console.error('리뷰 미디어 연결 오류:', linkError);
+              continue;
+            }
+
+            savedImages.push(mediaFile.file_url);
+          } catch (imgError) {
+            console.error('이미지 처리 오류:', imgError);
+          }
+        }
       }
 
       const responseReview = {
@@ -485,7 +598,7 @@ router.put('/:reviewId',
         rating: updatedReview.rating,
         title: updatedReview.title,
         content: updatedReview.content,
-        images: updatedReview.review_images || [],
+        images: savedImages,
         tags: [],
         is_anonymous: updatedReview.is_anonymous,
         created_at: updatedReview.created_at,

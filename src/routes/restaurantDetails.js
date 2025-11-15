@@ -81,7 +81,6 @@ router.get('/:id/complete', [
           rating,
           title,
           content,
-          review_images,
           is_anonymous,
           created_at,
           updated_at,
@@ -100,6 +99,16 @@ router.get('/:id/complete', [
             id,
             name,
             avatar_url
+          ),
+          review_media (
+            media_id,
+            display_order,
+            media_files (
+              id,
+              file_url,
+              thumbnail_url,
+              medium_url
+            )
           )
         `)
         .eq('restaurant_id', restaurantId)
@@ -109,13 +118,12 @@ router.get('/:id/complete', [
 
       // 3. 댓글 목록 (최신순, 처음 20개)
       supabase
-        .from('restaurant_comments')
+        .from('review_comments')
         .select(`
           id,
           user_id,
           content,
           parent_comment_id,
-          likes_count,
           created_at,
           updated_at,
           users:user_id (
@@ -124,8 +132,8 @@ router.get('/:id/complete', [
             avatar_url
           )
         `)
-        .eq('restaurant_id', restaurantId)
-        .eq('is_deleted', false)
+        .eq('review_id', restaurantId)
+        .eq('status', 'published')
         .is('parent_comment_id', null)
         .order('created_at', { ascending: false })
         .limit(20),
@@ -133,7 +141,41 @@ router.get('/:id/complete', [
       // 4. 메뉴 정보 (있는 경우)
       supabase
         .from('menus')
-        .select('*')
+        .select(`
+          id,
+          restaurant_id,
+          name,
+          name_en,
+          description,
+          price,
+          original_price,
+          category,
+          is_signature,
+          is_popular,
+          is_seasonal,
+          is_new,
+          spicy_level,
+          portion_size,
+          calories,
+          is_available,
+          sold_out,
+          order_count,
+          view_count,
+          display_order,
+          created_at,
+          updated_at,
+          menu_media (
+            media_id,
+            display_order,
+            media_files (
+              id,
+              file_url,
+              thumbnail_url,
+              medium_url,
+              large_url
+            )
+          )
+        `)
         .eq('restaurant_id', restaurantId)
         .order('display_order', { ascending: true }),
 
@@ -214,7 +256,9 @@ router.get('/:id/complete', [
       rating: review.rating,
       title: review.title,
       content: review.content,
-      images: review.review_images || [],
+      images: (review.review_media || [])
+        .sort((a, b) => a.display_order - b.display_order)
+        .map(rm => rm.media_files?.file_url || rm.media_files?.medium_url || ''),
       is_anonymous: review.is_anonymous,
       created_at: review.created_at,
       updated_at: review.updated_at,
@@ -227,12 +271,11 @@ router.get('/:id/complete', [
     const transformedComments = (commentsResult.data || []).map(comment => ({
       id: comment.id,
       user_id: comment.user_id,
+      review_id: comment.review_id,
       username: comment.users?.name || '알 수 없음',
       content: comment.content,
       created_at: comment.created_at,
       updated_at: comment.updated_at,
-      likes_count: comment.likes_count || 0,
-      is_liked: false,
       is_owner: false,
       replies: []
     }));
@@ -268,12 +311,25 @@ router.get('/:id/complete', [
       score: rt.score
     }));
 
-    // 메뉴 데이터 분류
-    const allMenus = menuResult.data || [];
+    // 메뉴 데이터 변환 및 분류
+    const transformedMenus = (menuResult.data || []).map(menu => ({
+      ...menu,
+      image_url: menu.menu_media?.[0]?.media_files?.file_url || null,
+      images: (menu.menu_media || [])
+        .sort((a, b) => a.display_order - b.display_order)
+        .map(mm => ({
+          id: mm.media_files?.id,
+          url: mm.media_files?.file_url,
+          thumbnail: mm.media_files?.thumbnail_url,
+          medium: mm.media_files?.medium_url,
+          large: mm.media_files?.large_url
+        }))
+    }));
+
     const categorizedMenus = {
-      all: allMenus,
-      signature: allMenus.filter(m => m.is_signature),
-      popular: allMenus.filter(m => m.is_popular)
+      all: transformedMenus,
+      signature: transformedMenus.filter(m => m.is_signature),
+      popular: transformedMenus.filter(m => m.is_popular)
     };
 
     // 응답 데이터 구성
@@ -504,14 +560,38 @@ router.get('/:id/comments/more', [
     const offset = parseInt(req.query.offset) || 0;
     const limit = parseInt(req.query.limit) || 20;
 
+    // 주의: 새 스키마에서는 review_comments만 존재합니다.
+    // 레스토랑에 직접 댓글을 다는 기능은 제거되었고, 리뷰에만 댓글을 달 수 있습니다.
+    // 이 API는 레스토랑의 모든 리뷰의 댓글을 가져오도록 수정되었습니다.
+
+    // 먼저 해당 레스토랑의 모든 리뷰 ID를 가져옵니다
+    const { data: reviews, error: reviewError } = await supabase
+      .from('restaurant_reviews')
+      .select('id')
+      .eq('restaurant_id', restaurantId)
+      .eq('is_deleted', false);
+
+    if (reviewError || !reviews || reviews.length === 0) {
+      return res.json({
+        success: true,
+        data: {
+          comments: [],
+          hasMore: false
+        }
+      });
+    }
+
+    const reviewIds = reviews.map(r => r.id);
+
+    // 모든 리뷰의 댓글을 가져옵니다
     const { data, error } = await supabase
-      .from('restaurant_comments')
+      .from('review_comments')
       .select(`
         id,
         user_id,
+        review_id,
         content,
         parent_comment_id,
-        likes_count,
         created_at,
         updated_at,
         users:user_id (
@@ -520,8 +600,8 @@ router.get('/:id/comments/more', [
           avatar_url
         )
       `)
-      .eq('restaurant_id', restaurantId)
-      .eq('is_deleted', false)
+      .in('review_id', reviewIds)
+      .eq('status', 'published')
       .is('parent_comment_id', null)
       .order('created_at', { ascending: false })
       .range(offset, offset + limit - 1);

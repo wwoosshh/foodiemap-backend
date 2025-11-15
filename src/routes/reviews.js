@@ -859,44 +859,25 @@ router.post('/:reviewId/report',
         return errorResponse(res, 409, '이미 신고한 리뷰입니다');
       }
 
-      // 신고 추가
+      // 신고 추가 (created_at은 DB DEFAULT 사용)
       const { data: report, error: reportError } = await supabaseAdmin
         .from('review_reports')
         .insert({
           review_id: reviewId,
           reporter_id: user_id,
           reason: reason.trim(),
-          details: details?.trim() || null,
-          created_at: new Date().toISOString()
+          details: details?.trim() || null
         })
         .select('id')
         .single();
 
       if (reportError) {
+        console.error('신고 추가 에러:', reportError);
         return errorResponse(res, 500, '신고 처리 중 오류가 발생했습니다', reportError.message);
       }
 
-      // 리뷰의 신고 수 증가 (현재 count 조회 후 +1)
-      const { data: currentReview, error: selectError } = await supabaseAdmin
-        .from('restaurant_reviews')
-        .select('report_count')
-        .eq('id', reviewId)
-        .single();
-
-      if (!selectError && currentReview) {
-        const { error: updateError } = await supabaseAdmin
-          .from('restaurant_reviews')
-          .update({
-            report_count: (currentReview.report_count || 0) + 1
-          })
-          .eq('id', reviewId);
-
-        if (updateError) {
-          console.warn('신고 수 업데이트 실패:', updateError.message);
-        }
-      } else {
-        console.warn('리뷰 신고 수 조회 실패:', selectError?.message);
-      }
+      // 트리거가 자동으로 report_count를 업데이트하므로 수동 업데이트 불필요
+      // update_review_report_count() 트리거가 처리함
 
       return successResponse(res, { report_id: report.id }, '리뷰가 신고되었습니다');
 

@@ -75,35 +75,7 @@ router.get('/:id/complete', [
       // 2. 리뷰 목록 (최신순, 페이지네이션 고려해서 처음 10개)
       supabase
         .from('restaurant_reviews')
-        .select(`
-          id,
-          user_id,
-          rating,
-          title,
-          content,
-          is_anonymous,
-          created_at,
-          updated_at,
-          helpful_count,
-          visit_date,
-          visit_count,
-          visit_purpose,
-          users:user_id (
-            id,
-            name,
-            avatar_url
-          ),
-          review_media (
-            media_id,
-            display_order,
-            media_files (
-              id,
-              file_url,
-              thumbnail_url,
-              medium_url
-            )
-          )
-        `)
+        .select('*')
         .eq('restaurant_id', restaurantId)
         .is('deleted_at', null)
         .order('created_at', { ascending: false })

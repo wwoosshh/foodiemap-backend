@@ -474,7 +474,6 @@ router.get('/:id/reviews/more', [
           rating,
           title,
           content,
-          review_images,
           is_anonymous,
           created_at,
           updated_at,
@@ -483,6 +482,16 @@ router.get('/:id/reviews/more', [
             id,
             name,
             avatar_url
+          ),
+          review_media (
+            media_id,
+            display_order,
+            media_files (
+              id,
+              file_url,
+              thumbnail_url,
+              medium_url
+            )
           )
         `)
         .eq('restaurant_id', restaurantId)
@@ -516,7 +525,9 @@ router.get('/:id/reviews/more', [
       rating: review.rating,
       title: review.title,
       content: review.content,
-      images: review.review_images || [],
+      images: (review.review_media || [])
+        .sort((a, b) => a.display_order - b.display_order)
+        .map(rm => rm.media_files?.file_url || rm.media_files?.medium_url || ''),
       is_anonymous: review.is_anonymous,
       created_at: review.created_at,
       updated_at: review.updated_at,

@@ -496,6 +496,142 @@ router.patch('/favorites/:favoriteId/memo', authMiddleware, async (req, res) => 
   }
 });
 
+// 즐겨찾기 폴더 변경
+router.patch('/favorites/:favoriteId/folder', authMiddleware, async (req, res) => {
+  try {
+    const { favoriteId } = req.params;
+    const { folder_name } = req.body;
+    const userId = req.user.id;
+
+    // 소유권 확인 및 폴더 업데이트
+    const { data, error } = await supabase
+      .from('user_favorites')
+      .update({ folder_name, updated_at: new Date().toISOString() })
+      .eq('id', favoriteId)
+      .eq('user_id', userId)
+      .select()
+      .single();
+
+    if (error) {
+      return res.status(500).json({
+        success: false,
+        message: '폴더 변경 중 오류가 발생했습니다.'
+      });
+    }
+
+    if (!data) {
+      return res.status(404).json({
+        success: false,
+        message: '즐겨찾기를 찾을 수 없습니다.'
+      });
+    }
+
+    res.json({
+      success: true,
+      message: '폴더가 변경되었습니다.',
+      data
+    });
+
+  } catch (error) {
+    console.error('폴더 변경 오류:', error);
+    res.status(500).json({
+      success: false,
+      message: '서버 오류가 발생했습니다.'
+    });
+  }
+});
+
+// 폴더명 일괄 변경 (폴더 이름 수정)
+router.patch('/favorites/folders/rename', authMiddleware, async (req, res) => {
+  try {
+    const { old_name, new_name } = req.body;
+    const userId = req.user.id;
+
+    if (!old_name || !new_name) {
+      return res.status(400).json({
+        success: false,
+        message: '기존 폴더명과 새 폴더명이 필요합니다.'
+      });
+    }
+
+    // 같은 이름인 경우
+    if (old_name === new_name) {
+      return res.status(400).json({
+        success: false,
+        message: '기존 폴더명과 새 폴더명이 같습니다.'
+      });
+    }
+
+    // 해당 폴더의 모든 즐겨찾기 업데이트
+    const { data, error } = await supabase
+      .from('user_favorites')
+      .update({ folder_name: new_name, updated_at: new Date().toISOString() })
+      .eq('user_id', userId)
+      .eq('folder_name', old_name)
+      .select();
+
+    if (error) {
+      return res.status(500).json({
+        success: false,
+        message: '폴더명 변경 중 오류가 발생했습니다.'
+      });
+    }
+
+    res.json({
+      success: true,
+      message: `폴더명이 "${old_name}"에서 "${new_name}"으로 변경되었습니다.`,
+      data: {
+        updated_count: data?.length || 0
+      }
+    });
+
+  } catch (error) {
+    console.error('폴더명 변경 오류:', error);
+    res.status(500).json({
+      success: false,
+      message: '서버 오류가 발생했습니다.'
+    });
+  }
+});
+
+// 폴더 삭제 (폴더 내 모든 즐겨찾기를 미분류로 이동)
+router.delete('/favorites/folders/:folderName', authMiddleware, async (req, res) => {
+  try {
+    const { folderName } = req.params;
+    const userId = req.user.id;
+
+    // 해당 폴더의 모든 즐겨찾기를 미분류(null)로 변경
+    const { data, error } = await supabase
+      .from('user_favorites')
+      .update({ folder_name: null, updated_at: new Date().toISOString() })
+      .eq('user_id', userId)
+      .eq('folder_name', folderName)
+      .select();
+
+    if (error) {
+      return res.status(500).json({
+        success: false,
+        message: '폴더 삭제 중 오류가 발생했습니다.'
+      });
+    }
+
+    res.json({
+      success: true,
+      message: `"${folderName}" 폴더가 삭제되었습니다. (${data?.length || 0}개의 즐겨찾기가 미분류로 이동)`,
+      data: {
+        moved_count: data?.length || 0
+      }
+    });
+
+  } catch (error) {
+    console.error('폴더 삭제 오류:', error);
+    res.status(500).json({
+      success: false,
+      message: '서버 오류가 발생했습니다.'
+    });
+  }
+});
+
 // 주변 맛집 검색
 router.get('/nearby/search', [
   query('lat').isFloat({ min: -90, max: 90 }),

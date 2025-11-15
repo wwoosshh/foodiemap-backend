@@ -509,30 +509,7 @@ router.put('/:reviewId',
         .from('restaurant_reviews')
         .update(updateData)
         .eq('id', reviewId)
-        .select(`
-          id,
-          user_id,
-          rating,
-          title,
-          content,
-          is_anonymous,
-          created_at,
-          updated_at,
-          helpful_count,
-          users!user_id (
-            name,
-            avatar_url
-          ),
-          review_media (
-            media_id,
-            display_order,
-            media_files (
-              id,
-              file_url,
-              thumbnail_url
-            )
-          )
-        `)
+        .select('*')
         .single();
 
       if (updateError) {
@@ -540,9 +517,7 @@ router.put('/:reviewId',
       }
 
       // 이미지가 제공된 경우 기존 이미지 삭제 후 새로 추가
-      let savedImages = (updatedReview.review_media || [])
-        .sort((a, b) => a.display_order - b.display_order)
-        .map(rm => rm.media_files?.file_url || '');
+      let savedImages = [];
 
       if (images && images.length > 0) {
         // 기존 review_media 연결 삭제
@@ -593,8 +568,8 @@ router.put('/:reviewId',
       const responseReview = {
         id: updatedReview.id,
         user_id: updatedReview.user_id,
-        username: updatedReview.is_anonymous ? '익명' : (updatedReview.users?.name || '알 수 없는 사용자'),
-        avatar_url: updatedReview.is_anonymous ? null : updatedReview.users?.avatar_url,
+        username: updatedReview.is_anonymous ? '익명' : '사용자',
+        avatar_url: null,
         rating: updatedReview.rating,
         title: updatedReview.title,
         content: updatedReview.content,

@@ -214,7 +214,6 @@ router.get('/:id/complete', [
       supabase
         .from('restaurant_tags')
         .select(`
-          score,
           tags (
             id,
             name,
@@ -223,8 +222,7 @@ router.get('/:id/complete', [
             color
           )
         `)
-        .eq('restaurant_id', restaurantId)
-        .order('score', { ascending: false }),
+        .eq('restaurant_id', restaurantId),
 
       // 8. 사용자가 도움돼요를 누른 리뷰 (로그인된 사용자가 있는 경우)
       userId ? supabase
@@ -310,8 +308,7 @@ router.get('/:id/complete', [
       name: rt.tags.name,
       category: rt.tags.category,
       icon: rt.tags.icon,
-      color: rt.tags.color,
-      score: rt.score
+      color: rt.tags.color
     }));
 
     // 메뉴 데이터 변환 및 분류

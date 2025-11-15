@@ -181,7 +181,7 @@ router.get('/:restaurantId',
           created_at,
           updated_at,
           helpful_count,
-          users:user_id (
+          users!user_id (
             name,
             avatar_url
           ),
@@ -519,7 +519,7 @@ router.put('/:reviewId',
           created_at,
           updated_at,
           helpful_count,
-          users:user_id (
+          users!user_id (
             name,
             avatar_url
           ),
@@ -747,10 +747,10 @@ router.delete('/:reviewId',
         return errorResponse(res, 403, '리뷰를 삭제할 권한이 없습니다');
       }
 
-      // 리뷰 삭제 (cascade로 도움이 돼요도 함께 삭제됨)
+      // 리뷰 소프트 삭제 (deleted_at 업데이트)
       const { error: deleteError } = await supabaseAdmin
         .from('restaurant_reviews')
-        .delete()
+        .update({ deleted_at: new Date().toISOString() })
         .eq('id', reviewId);
 
       if (deleteError) {

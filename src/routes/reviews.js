@@ -316,14 +316,12 @@ router.get('/:restaurantId/stats',
 router.post('/',
   [
     body('restaurant_id').isUUID().withMessage('유효한 맛집 ID가 아닙니다'),
-    body('rating').isInt({ min: 1, max: 5 }).withMessage('평점은 1-5 사이의 정수여야 합니다').toInt(),
+    body('rating').notEmpty().withMessage('평점은 필수입니다'),
     body('title').trim().isLength({ min: 1, max: 100 }).withMessage('제목은 1-100자여야 합니다'),
     body('content').trim().isLength({ min: 10, max: 2000 }).withMessage('내용은 10-2000자여야 합니다'),
     body('images').optional().isArray().withMessage('이미지는 배열이어야 합니다'),
-    body('images.*').optional().isURL().withMessage('이미지 URL 형식이 올바르지 않습니다'),
     body('tags').optional().isArray().withMessage('태그는 배열이어야 합니다'),
-    body('tags.*').optional().isString().withMessage('태그는 문자열이어야 합니다'),
-    body('is_anonymous').optional().isBoolean().withMessage('익명 여부는 boolean이어야 합니다').toBoolean()
+    body('is_anonymous').optional()
   ],
   requireAuth,
   async (req, res) => {
@@ -336,12 +334,29 @@ router.post('/',
       const { restaurant_id, rating, title, content, images, tags, is_anonymous } = req.body;
       const user_id = req.user.id;
 
-      // 중복 리뷰 확인 (같은 사용자가 같은 맛집에 리뷰 작성했는지)
+      // 타입 변환 및 검증
+      const ratingNum = Number(rating);
+      if (isNaN(ratingNum) || ratingNum < 1 || ratingNum > 5) {
+        return errorResponse(res, 400, '평점은 1-5 사이의 숫자여야 합니다');
+      }
+
+      // is_anonymous 처리
+      let isAnonymous = false;
+      if (is_anonymous !== undefined && is_anonymous !== null) {
+        if (typeof is_anonymous === 'string') {
+          isAnonymous = is_anonymous.toLowerCase() === 'true';
+        } else {
+          isAnonymous = !!is_anonymous;
+        }
+      }
+
+      // 중복 리뷰 확인 (삭제되지 않은 리뷰만 체크)
       const { data: existingReview } = await supabaseAdmin
         .from('restaurant_reviews')
         .select('id')
         .eq('restaurant_id', restaurant_id)
         .eq('user_id', user_id)
+        .is('deleted_at', null)
         .single();
 
       if (existingReview) {
@@ -354,10 +369,10 @@ router.post('/',
         .insert({
           restaurant_id,
           user_id,
-          rating,
-          title: title.trim(),
-          content: content.trim(),
-          is_anonymous: is_anonymous || false
+          rating: ratingNum,
+          title: String(title).trim(),
+          content: String(content).trim(),
+          is_anonymous: isAnonymous
         })
         .select(`
           id,
@@ -458,12 +473,12 @@ router.post('/',
 router.put('/:reviewId',
   [
     param('reviewId').isUUID().withMessage('유효한 리뷰 ID가 아닙니다'),
-    body('rating').isInt({ min: 1, max: 5 }).withMessage('평점은 1-5 사이의 정수여야 합니다').toInt(),
+    body('rating').notEmpty().withMessage('평점은 필수입니다'),
     body('title').trim().isLength({ min: 1, max: 100 }).withMessage('제목은 1-100자여야 합니다'),
     body('content').trim().isLength({ min: 10, max: 2000 }).withMessage('내용은 10-2000자여야 합니다'),
     body('images').optional().isArray().withMessage('이미지는 배열이어야 합니다'),
     body('tags').optional().isArray().withMessage('태그는 배열이어야 합니다'),
-    body('is_anonymous').optional().isBoolean().withMessage('익명 여부는 boolean이어야 합니다').toBoolean()
+    body('is_anonymous').optional()
   ],
   requireAuth,
   async (req, res) => {
@@ -476,6 +491,12 @@ router.put('/:reviewId',
       const { reviewId } = req.params;
       const { rating, title, content, images, tags, is_anonymous } = req.body;
       const user_id = req.user.id;
+
+      // 타입 변환 및 검증
+      const ratingNum = Number(rating);
+      if (isNaN(ratingNum) || ratingNum < 1 || ratingNum > 5) {
+        return errorResponse(res, 400, '평점은 1-5 사이의 숫자여야 합니다');
+      }
 
       // 리뷰 소유권 확인 (삭제되지 않은 리뷰만)
       const { data: existingReview, error: reviewError } = await supabaseAdmin
@@ -495,16 +516,22 @@ router.put('/:reviewId',
 
       // 리뷰 수정 데이터 준비
       const updateData = {
-        rating: parseInt(rating),
-        title: title.trim(),
-        content: content.trim(),
+        rating: ratingNum,
+        title: String(title).trim(),
+        content: String(content).trim(),
         updated_at: new Date().toISOString()
       };
 
-      // is_anonymous가 명시적으로 전달된 경우에만 업데이트
+      // is_anonymous 처리 (문자열 "false"를 올바르게 처리)
       if (is_anonymous !== undefined && is_anonymous !== null) {
-        updateData.is_anonymous = Boolean(is_anonymous);
+        if (typeof is_anonymous === 'string') {
+          updateData.is_anonymous = is_anonymous.toLowerCase() === 'true';
+        } else {
+          updateData.is_anonymous = !!is_anonymous;
+        }
       }
+
+      console.log('리뷰 수정 데이터:', JSON.stringify(updateData));
 
       const { data: updatedReview, error: updateError } = await supabaseAdmin
         .from('restaurant_reviews')
@@ -514,6 +541,7 @@ router.put('/:reviewId',
         .single();
 
       if (updateError) {
+        console.error('Update error details:', updateError);
         return errorResponse(res, 500, '리뷰 수정 중 오류가 발생했습니다', updateError.message);
       }
 

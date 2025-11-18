@@ -139,16 +139,21 @@ app.use(cors({
 
     // 화이트리스트에 있는 경우 허용
     if (allowedOrigins.includes(origin)) {
-      callback(null, true);
+      return callback(null, true);
+    }
+
+    // Vercel 도메인 전체 허용 (preview 배포 포함)
+    if (origin.endsWith('.vercel.app')) {
+      return callback(null, true);
+    }
+
+    // 프로덕션에서는 거부, 개발 환경에서는 경고 후 허용
+    if (process.env.NODE_ENV === 'production') {
+      logger.warn('CORS blocked request from unauthorized origin', { origin });
+      callback(new Error('Not allowed by CORS'));
     } else {
-      // 프로덕션에서는 거부, 개발 환경에서는 경고 후 허용
-      if (process.env.NODE_ENV === 'production') {
-        logger.warn('CORS blocked request from unauthorized origin', { origin });
-        callback(new Error('Not allowed by CORS'));
-      } else {
-        logger.warn('CORS: Allowing unauthorized origin in development', { origin });
-        callback(null, true);
-      }
+      logger.warn('CORS: Allowing unauthorized origin in development', { origin });
+      callback(null, true);
     }
   },
   credentials: true,

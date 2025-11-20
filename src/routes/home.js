@@ -9,7 +9,7 @@ const router = express.Router();
 router.get('/data', async (req, res) => {
   try {
     // 병렬로 모든 데이터 가져오기
-    const [bannersResult, categoriesResult, featuredRestaurantsResult, restaurantsResult, pushedRestaurantsResult, statsResult] = await Promise.all([
+    const [bannersResult, categoriesResult, featuredRestaurantsResult, restaurantsResult, pushedRestaurantsResult, eventsResult, statsResult] = await Promise.all([
       // 활성화된 배너 조회
       supabase
         .from('banners')
@@ -110,6 +110,16 @@ router.get('/data', async (req, res) => {
         .order('display_order', { ascending: true })
         .limit(3),
 
+      // 활성화된 이벤트 조회 (종료되지 않은 것만, 최대 10개)
+      supabase
+        .from('events')
+        .select('*')
+        .eq('is_active', true)
+        .or(`end_date.is.null,end_date.gte.${new Date().toISOString()}`)
+        .order('display_order', { ascending: true })
+        .order('created_at', { ascending: false })
+        .limit(10),
+
       // 통계 데이터 조회
       (async () => {
         const [restaurantCount, reviewCount, userCount] = await Promise.all([
@@ -144,6 +154,9 @@ router.get('/data', async (req, res) => {
     if (pushedRestaurantsResult.error) {
       console.error('푸시 맛집 조회 실패:', pushedRestaurantsResult.error);
     }
+    if (eventsResult.error) {
+      console.error('이벤트 조회 실패:', eventsResult.error);
+    }
     if (statsResult.error) {
       console.error('통계 조회 실패:', statsResult.error);
     }
@@ -155,6 +168,7 @@ router.get('/data', async (req, res) => {
       featuredRestaurants: featuredRestaurantsResult.data || [],
       restaurants: restaurantsResult.data || [],
       pushedRestaurants: pushedRestaurantsResult.data || [],
+      events: eventsResult.data || [],
       stats: statsResult.data || {
         totalRestaurants: 0,
         totalReviews: 0,

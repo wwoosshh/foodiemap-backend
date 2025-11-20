@@ -123,13 +123,11 @@ router.put('/',
         updateData.preferences = req.body.preferences;
       }
 
-      // UPSERT (있으면 업데이트, 없으면 생성)
+      // UPDATE만 사용
       const { data, error } = await supabase
         .from('user_preferences')
-        .upsert({
-          user_id: userId,
-          ...updateData
-        })
+        .update(updateData)
+        .eq('user_id', userId)
         .select()
         .single();
 
@@ -169,13 +167,14 @@ router.put('/language',
       const userId = req.user.id;
       const { language } = req.body;
 
+      // UPDATE만 사용 (UPSERT 대신)
       const { data, error } = await supabase
         .from('user_preferences')
-        .upsert({
-          user_id: userId,
+        .update({
           preferred_language: language,
           updated_at: new Date().toISOString()
         })
+        .eq('user_id', userId)
         .select()
         .single();
 
@@ -215,13 +214,14 @@ router.put('/theme',
       const userId = req.user.id;
       const { theme } = req.body;
 
+      // UPDATE만 사용
       const { data, error } = await supabase
         .from('user_preferences')
-        .upsert({
-          user_id: userId,
+        .update({
           theme,
           updated_at: new Date().toISOString()
         })
+        .eq('user_id', userId)
         .select()
         .single();
 
@@ -269,12 +269,11 @@ router.put('/notifications',
         updateData.email_notification = req.body.email_notification;
       }
 
+      // UPDATE만 사용
       const { data, error } = await supabase
         .from('user_preferences')
-        .upsert({
-          user_id: userId,
-          ...updateData
-        })
+        .update(updateData)
+        .eq('user_id', userId)
         .select()
         .single();
 

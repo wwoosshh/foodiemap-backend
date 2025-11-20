@@ -115,6 +115,7 @@ router.get('/data', async (req, res) => {
         .from('events')
         .select('*')
         .eq('is_active', true)
+        .eq('status', 'active')
         .or(`end_date.is.null,end_date.gte.${new Date().toISOString()}`)
         .order('display_order', { ascending: true })
         .order('created_at', { ascending: false })
@@ -156,6 +157,11 @@ router.get('/data', async (req, res) => {
     }
     if (eventsResult.error) {
       console.error('이벤트 조회 실패:', eventsResult.error);
+    } else {
+      console.log('이벤트 조회 성공:', eventsResult.data?.length || 0, '개');
+      if (eventsResult.data && eventsResult.data.length > 0) {
+        console.log('첫 번째 이벤트:', JSON.stringify(eventsResult.data[0], null, 2));
+      }
     }
     if (statsResult.error) {
       console.error('통계 조회 실패:', statsResult.error);

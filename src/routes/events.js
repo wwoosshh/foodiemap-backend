@@ -77,6 +77,7 @@ router.get('/',
         .from('events')
         .select('*', { count: 'exact' })
         .eq('is_active', true)
+        .eq('status', 'active')
         .or(`end_date.is.null,end_date.gte.${new Date().toISOString()}`)
         .order('display_order', { ascending: true })
         .order('created_at', { ascending: false })

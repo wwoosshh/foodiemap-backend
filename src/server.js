@@ -39,6 +39,10 @@ const { logger, deployLogger } = require('./config/logger');
 const httpLoggingMiddleware = require('./middleware/httpLogger');
 const app = express();
 
+// Trust proxy 설정 (Render, Heroku 등 reverse proxy 환경)
+// X-Forwarded-For 헤더를 신뢰하여 정확한 클라이언트 IP 식별
+app.set('trust proxy', 1);
+
 // Render에서 자동으로 할당하는 포트 사용
 const PORT = process.env.PORT || 10000;
 

@@ -214,7 +214,150 @@ const sendVerificationSuccessEmail = async (email, userName = '사용자') => {
   }
 };
 
+/**
+ * 문의하기 이메일 발송 (관리자에게)
+ * @param {Object} contactData - 문의 데이터
+ * @param {string} contactData.name - 문의자 이름
+ * @param {string} contactData.email - 문의자 이메일
+ * @param {string} contactData.subject - 문의 제목
+ * @param {string} contactData.message - 문의 내용
+ */
+const sendContactEmail = async (contactData) => {
+  try {
+    const { name, email, subject, message } = contactData;
+
+    const mailOptions = {
+      from: {
+        name: 'FoodieMap 문의',
+        address: process.env.EMAIL_USER
+      },
+      to: 'nunconnect1@gmail.com', // 관리자 이메일
+      replyTo: email, // 답장 시 문의자 이메일로 전송
+      subject: `[맛집큐브 문의] ${subject}`,
+      html: `
+        <!DOCTYPE html>
+        <html>
+        <head>
+          <meta charset="UTF-8">
+          <meta name="viewport" content="width=device-width, initial-scale=1.0">
+          <style>
+            body {
+              font-family: 'Apple SD Gothic Neo', 'Malgun Gothic', sans-serif;
+              line-height: 1.6;
+              color: #333;
+              max-width: 600px;
+              margin: 0 auto;
+              padding: 20px;
+            }
+            .container {
+              background-color: #ffffff;
+              border-radius: 10px;
+              padding: 40px;
+              box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+            }
+            .header {
+              text-align: center;
+              margin-bottom: 30px;
+              border-bottom: 3px solid #FF6B6B;
+              padding-bottom: 20px;
+            }
+            .logo {
+              font-size: 32px;
+              font-weight: bold;
+              color: #FF6B6B;
+            }
+            .info-section {
+              background-color: #f8f9fa;
+              padding: 20px;
+              border-radius: 8px;
+              margin: 20px 0;
+            }
+            .info-row {
+              display: flex;
+              margin-bottom: 10px;
+            }
+            .info-label {
+              font-weight: bold;
+              color: #555;
+              min-width: 100px;
+            }
+            .info-value {
+              color: #333;
+            }
+            .message-section {
+              background-color: #fff;
+              border: 2px solid #e0e0e0;
+              border-radius: 8px;
+              padding: 20px;
+              margin: 20px 0;
+              min-height: 150px;
+            }
+            .footer {
+              text-align: center;
+              margin-top: 30px;
+              padding-top: 20px;
+              border-top: 1px solid #e0e0e0;
+              color: #999;
+              font-size: 12px;
+            }
+          </style>
+        </head>
+        <body>
+          <div class="container">
+            <div class="header">
+              <div class="logo">🍴 맛집큐브</div>
+              <h2>새로운 문의가 도착했습니다</h2>
+            </div>
+
+            <div class="info-section">
+              <div class="info-row">
+                <span class="info-label">문의자 이름:</span>
+                <span class="info-value">${name}</span>
+              </div>
+              <div class="info-row">
+                <span class="info-label">이메일:</span>
+                <span class="info-value">${email}</span>
+              </div>
+              <div class="info-row">
+                <span class="info-label">문의 제목:</span>
+                <span class="info-value">${subject}</span>
+              </div>
+              <div class="info-row">
+                <span class="info-label">문의 일시:</span>
+                <span class="info-value">${new Date().toLocaleString('ko-KR', { timeZone: 'Asia/Seoul' })}</span>
+              </div>
+            </div>
+
+            <h3>📝 문의 내용</h3>
+            <div class="message-section">
+              ${message.replace(/\n/g, '<br>')}
+            </div>
+
+            <p style="margin-top: 30px; color: #666;">
+              💡 이 메일에 답장하면 문의자(<strong>${email}</strong>)에게 직접 답변이 전송됩니다.
+            </p>
+
+            <div class="footer">
+              <p>이 메일은 맛집큐브 웹사이트의 문의 양식에서 자동으로 발송되었습니다.</p>
+              <p>&copy; 2025 맛집큐브. All rights reserved.</p>
+            </div>
+          </div>
+        </body>
+        </html>
+      `
+    };
+
+    const info = await transporter.sendMail(mailOptions);
+    console.log('✅ 문의 메일 발송 성공:', 'nunconnect1@gmail.com');
+    return { success: true, messageId: info.messageId };
+  } catch (error) {
+    console.error('❌ 문의 메일 발송 실패:', error);
+    throw error;
+  }
+};
+
 module.exports = {
   sendVerificationEmail,
-  sendVerificationSuccessEmail
+  sendVerificationSuccessEmail,
+  sendContactEmail
 };

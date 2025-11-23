@@ -23,7 +23,7 @@ router.get('/data', async (req, res) => {
         .select('*')
         .order('id', { ascending: true }),
 
-      // 추천 맛집 (평점 높은 순 3개) - 필요한 필드만 선택
+      // 추천 맛집 (평점 높은 순 3개) - 이미지 포함
       supabase
         .from('restaurants')
         .select(`
@@ -41,12 +41,21 @@ router.get('/data', async (req, res) => {
             name,
             icon,
             color
+          ),
+          restaurant_media (
+            id,
+            display_order,
+            is_representative,
+            media_files (
+              file_url,
+              thumbnail_url
+            )
           )
         `)
         .order('rating', { ascending: false })
         .limit(3),
 
-      // 일반 맛집 목록 (12개) - 필요한 필드만 선택
+      // 일반 맛집 목록 (12개) - 이미지 포함
       supabase
         .from('restaurants')
         .select(`
@@ -64,12 +73,21 @@ router.get('/data', async (req, res) => {
             name,
             icon,
             color
+          ),
+          restaurant_media (
+            id,
+            display_order,
+            is_representative,
+            media_files (
+              file_url,
+              thumbnail_url
+            )
           )
         `)
         .order('created_at', { ascending: false })
         .limit(12),
 
-      // 푸시 맛집 조회 (활성화된 것만, 최대 3개)
+      // 푸시 맛집 조회 (활성화된 것만, 최대 3개) - 이미지 포함
       supabase
         .from('featured_restaurants')
         .select(`
@@ -97,6 +115,15 @@ router.get('/data', async (req, res) => {
               name,
               icon,
               color
+            ),
+            restaurant_media (
+              id,
+              display_order,
+              is_representative,
+              media_files (
+                file_url,
+                thumbnail_url
+              )
             )
           )
         `)
@@ -161,13 +188,51 @@ router.get('/data', async (req, res) => {
       console.error('통계 조회 실패:', statsResult.error);
     }
 
+    // 레스토랑 데이터 변환 함수 (이미지 추출)
+    const transformRestaurants = (restaurants) => {
+      return (restaurants || []).map(restaurant => {
+        // 대표 이미지 추출
+        const representativeMedia = restaurant.restaurant_media?.find(m => m.is_representative);
+        const images = representativeMedia?.media_files?.file_url
+          ? [representativeMedia.media_files.file_url]
+          : [];
+
+        return {
+          ...restaurant,
+          images
+        };
+      });
+    };
+
+    // 푸시 맛집 데이터 변환 함수
+    const transformPushedRestaurants = (pushedRestaurants) => {
+      return (pushedRestaurants || []).map(pushed => {
+        // restaurant 객체에 이미지 추가
+        if (pushed.restaurant) {
+          const representativeMedia = pushed.restaurant.restaurant_media?.find(m => m.is_representative);
+          const images = representativeMedia?.media_files?.file_url
+            ? [representativeMedia.media_files.file_url]
+            : [];
+
+          return {
+            ...pushed,
+            restaurant: {
+              ...pushed.restaurant,
+              images
+            }
+          };
+        }
+        return pushed;
+      });
+    };
+
     // 응답 데이터 구성
     const responseData = {
       banners: bannersResult.data || [],
       categories: categoriesResult.data || [],
-      featuredRestaurants: featuredRestaurantsResult.data || [],
-      restaurants: restaurantsResult.data || [],
-      pushedRestaurants: pushedRestaurantsResult.data || [],
+      featuredRestaurants: transformRestaurants(featuredRestaurantsResult.data),
+      restaurants: transformRestaurants(restaurantsResult.data),
+      pushedRestaurants: transformPushedRestaurants(pushedRestaurantsResult.data),
       events: eventsResult.data || [],
       stats: statsResult.data || {
         totalRestaurants: 0,

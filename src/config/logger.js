@@ -1,30 +1,30 @@
 const winston = require('winston');
 
-// Pretty JSON 포맷: 들여쓰기가 있는 읽기 쉬운 JSON
-const prettyJsonFormat = winston.format.combine(
-  winston.format.timestamp({ format: 'YYYY-MM-DDTHH:mm:ss.SSSZ' }),
-  winston.format.errors({ stack: true }),
-  winston.format.printf((info) => {
-    // timestamp와 level을 제외한 나머지를 JSON으로 출력
-    const { timestamp, level, message, ...rest } = info;
-
-    // 전체 로그 객체를 보기 좋게 포맷
-    const logObject = {
-      timestamp,
-      level,
-      message,
-      ...rest
-    };
-
-    return JSON.stringify(logObject, null, 2); // 들여쓰기 2칸
-  })
-);
-
-// Compact JSON 포맷: 한 줄로 압축 (필요시)
+// Compact JSON 포맷: 한 줄로 압축 (프로덕션용)
 const compactJsonFormat = winston.format.combine(
   winston.format.timestamp({ format: 'YYYY-MM-DDTHH:mm:ss.SSSZ' }),
   winston.format.errors({ stack: true }),
   winston.format.json()
+);
+
+// Simple JSON 포맷: 구조화되지만 간결한 한 줄 포맷
+const simpleJsonFormat = winston.format.combine(
+  winston.format.timestamp({ format: 'YYYY-MM-DD HH:mm:ss' }),
+  winston.format.errors({ stack: true }),
+  winston.format.printf((info) => {
+    const { timestamp, level, message, service, ...meta } = info;
+
+    // 기본 로그 문자열
+    let log = JSON.stringify({
+      timestamp,
+      level: level.toUpperCase(),
+      service,
+      message,
+      ...(Object.keys(meta).length > 0 ? { meta } : {})
+    });
+
+    return log;
+  })
 );
 
 // 개발 환경용 포맷: 사람이 읽기 쉬운 형식
@@ -46,7 +46,7 @@ const consoleFormat = winston.format.combine(
 // Logger 생성
 const logger = winston.createLogger({
   level: process.env.LOG_LEVEL || 'info',
-  format: process.env.NODE_ENV === 'production' ? prettyJsonFormat : consoleFormat,
+  format: process.env.NODE_ENV === 'production' ? compactJsonFormat : consoleFormat,
   defaultMeta: {
     service: 'foodiemap-backend',
     environment: process.env.NODE_ENV || 'development'
@@ -54,7 +54,7 @@ const logger = winston.createLogger({
   transports: [
     // Console transport
     new winston.transports.Console({
-      format: process.env.NODE_ENV === 'production' ? prettyJsonFormat : consoleFormat
+      format: process.env.NODE_ENV === 'production' ? compactJsonFormat : consoleFormat
     })
   ]
 });
@@ -62,7 +62,7 @@ const logger = winston.createLogger({
 // HTTP 로그 전용 로거
 const httpLogger = winston.createLogger({
   level: 'info',
-  format: prettyJsonFormat,
+  format: process.env.NODE_ENV === 'production' ? compactJsonFormat : simpleJsonFormat,
   defaultMeta: {
     service: 'foodiemap-backend',
     environment: process.env.NODE_ENV || 'development',
@@ -76,7 +76,7 @@ const httpLogger = winston.createLogger({
 // Deploy 로그 전용 로거
 const deployLogger = winston.createLogger({
   level: 'info',
-  format: prettyJsonFormat,
+  format: process.env.NODE_ENV === 'production' ? compactJsonFormat : simpleJsonFormat,
   defaultMeta: {
     service: 'foodiemap-backend',
     environment: process.env.NODE_ENV || 'development',

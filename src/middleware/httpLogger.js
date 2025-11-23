@@ -18,50 +18,33 @@ const httpLoggingMiddleware = (req, res, next) => {
   req.requestId = requestId;
   res.setHeader('X-Request-ID', requestId);
 
-  // 요청 시작 로그
+  // 요청 시작 로그 (간결화)
   const requestLog = {
     requestId,
-    timestamp: new Date().toISOString(),
     method: req.method,
-    path: req.path,
-    fullUrl: req.originalUrl,
-    host: req.get('host'),
-    protocol: req.protocol,
-    httpVersion: `HTTP/${req.httpVersion}`,
-    srcIp: req.ip || req.connection.remoteAddress,
-    userAgent: req.get('user-agent') || 'unknown',
-    referer: req.get('referer') || req.get('referrer') || 'direct',
-    query: Object.keys(req.query).length > 0 ? req.query : undefined,
-    // 민감한 정보는 제외
-    headers: {
-      'content-type': req.get('content-type'),
-      'accept': req.get('accept'),
-      'accept-language': req.get('accept-language'),
-      'origin': req.get('origin')
-    }
+    path: req.originalUrl,
+    ip: req.ip || req.connection.remoteAddress,
+    userAgent: req.get('user-agent') || 'unknown'
   };
 
-  // 응답 완료 시 상세 로그 기록
+  // 응답 완료 시 간결한 로그 기록
   res.on('finish', () => {
     const duration = Date.now() - startTime;
 
     const responseLog = {
       ...requestLog,
-      httpStatus: res.statusCode,
-      statusMessage: res.statusMessage,
-      totalDuration: duration,
-      contentLength: res.get('content-length') || 0,
-      responseTime: `${duration}ms`,
-      level: res.statusCode >= 500 ? 'error' : res.statusCode >= 400 ? 'warn' : 'info'
+      status: res.statusCode,
+      duration: `${duration}ms`
     };
 
-    // 로그 레벨에 따라 기록
-    if (responseLog.level === 'error') {
-      httpLogger.error('HTTP Request', responseLog);
-    } else if (responseLog.level === 'warn') {
-      httpLogger.warn('HTTP Request', responseLog);
+    // 로그 레벨에 따라 기록 (4xx, 5xx만 상세 로깅)
+    if (res.statusCode >= 500) {
+      httpLogger.error('HTTP Error', responseLog);
+    } else if (res.statusCode >= 400) {
+      httpLogger.warn('HTTP Client Error', responseLog);
     } else {
-      httpLogger.info('HTTP Request', responseLog);
+      // 2xx, 3xx는 info 레벨로 간단히 기록
+      httpLogger.info('HTTP', responseLog);
     }
   });
 
@@ -69,14 +52,11 @@ const httpLoggingMiddleware = (req, res, next) => {
   res.on('error', (err) => {
     const duration = Date.now() - startTime;
 
-    httpLogger.error('HTTP Request Error', {
+    httpLogger.error('HTTP Stream Error', {
       ...requestLog,
-      totalDuration: duration,
-      error: {
-        message: err.message,
-        stack: err.stack,
-        code: err.code
-      }
+      duration: `${duration}ms`,
+      error: err.message,
+      stack: err.stack
     });
   });
 

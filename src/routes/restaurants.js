@@ -3,8 +3,59 @@ const { body, query, validationResult } = require('express-validator');
 const Restaurant = require('../models/Restaurant');
 const authMiddleware = require('../middleware/auth');
 const supabase = require('../config/supabase');
+const { chosungIncludes, getChoseong } = require('es-hangul');
 
 const router = express.Router();
+
+// 한글 초성인지 확인하는 함수
+const isChosungOnly = (str) => {
+  const chosungRegex = /^[ㄱ-ㅎ\s]+$/;
+  return chosungRegex.test(str);
+};
+
+// 초성 검색 매칭 함수 (이름, 주소, 카테고리)
+const matchesChosungSearch = (restaurant, searchQuery) => {
+  const query = searchQuery.trim();
+
+  // 맛집 이름 초성 매칭
+  if (chosungIncludes(restaurant.name || '', query)) {
+    return true;
+  }
+
+  // 주소 초성 매칭
+  if (chosungIncludes(restaurant.address || '', query)) {
+    return true;
+  }
+
+  // 카테고리 이름 초성 매칭
+  if (restaurant.categories?.name && chosungIncludes(restaurant.categories.name, query)) {
+    return true;
+  }
+
+  return false;
+};
+
+// 일반 검색 매칭 함수 (이름, 주소, 카테고리)
+const matchesNormalSearch = (restaurant, searchQuery) => {
+  const query = searchQuery.toLowerCase().trim();
+
+  // 맛집 이름 매칭
+  if ((restaurant.name || '').toLowerCase().includes(query)) {
+    return true;
+  }
+
+  // 주소 매칭
+  if ((restaurant.address || '').toLowerCase().includes(query)) {
+    return true;
+  }
+
+  // 카테고리 이름 매칭
+  if (restaurant.categories?.name && restaurant.categories.name.toLowerCase().includes(query)) {
+    return true;
+  }
+
+  return false;
+};
 
 // 다중 정렬 맛집 목록 조회 (한 번의 요청으로 모든 정렬 방식 반환)
 router.get('/multi-sort', [
@@ -223,8 +274,11 @@ router.get('/', [
       query = query.eq('category_id', categoryId);
     }
 
-    // 검색 필터 (이름, 주소, 카테고리)
-    if (search) {
+    // 초성 검색 여부 확인
+    const isChosungSearch = search && isChosungOnly(search);
+
+    // 일반 검색 필터 (초성 검색이 아닌 경우에만 DB 필터 적용)
+    if (search && !isChosungSearch) {
       // SQL Injection 방지: 특수 문자 이스케이프
       const sanitizedSearch = search.replace(/[%_\\]/g, '\\$&');
 
@@ -271,7 +325,62 @@ router.get('/', [
 
     query = query.order(orderColumn, { ascending: orderAscending });
 
-    // 페이지네이션
+    // 초성 검색인 경우 전체 데이터를 가져와서 서버에서 필터링
+    if (isChosungSearch) {
+      // 전체 데이터 조회 (페이지네이션 없이)
+      const { data: allRestaurants, error: allError } = await query;
+
+      if (allError) {
+        console.error('Supabase 쿼리 오류:', allError);
+        throw allError;
+      }
+
+      // 레스토랑 데이터 변환 (대표 이미지 추출)
+      const transformedAll = (allRestaurants || []).map(restaurant => {
+        const representativeMedia = restaurant.restaurant_media?.find(m => m.is_representative);
+        const images = representativeMedia?.media_files?.file_url
+          ? [representativeMedia.media_files.file_url]
+          : [];
+
+        return {
+          ...restaurant,
+          images
+        };
+      });
+
+      // 초성 매칭 필터링
+      const filteredRestaurants = transformedAll.filter(restaurant =>
+        matchesChosungSearch(restaurant, search)
+      );
+
+      // 서버 사이드 페이지네이션
+      const total = filteredRestaurants.length;
+      const totalPages = Math.ceil(total / limit);
+      const paginatedRestaurants = filteredRestaurants.slice(offset, offset + limit);
+
+      return res.json({
+        success: true,
+        data: {
+          restaurants: paginatedRestaurants,
+          pagination: {
+            page,
+            limit,
+            total,
+            totalPages,
+            hasNext: page < totalPages,
+            hasPrev: page > 1
+          },
+          filters: {
+            categoryId,
+            search,
+            sort,
+            searchType: 'chosung'
+          }
+        }
+      });
+    }
+
+    // 일반 검색: DB 페이지네이션 적용
     query = query.range(offset, offset + limit - 1);
 
     const { data: restaurants, error, count } = await query;
@@ -311,7 +420,8 @@ router.get('/', [
         filters: {
           categoryId,
           search,
-          sort
+          sort,
+          searchType: 'normal'
         }
       }
     });

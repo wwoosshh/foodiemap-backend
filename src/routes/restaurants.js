@@ -223,11 +223,27 @@ router.get('/', [
       query = query.eq('category_id', categoryId);
     }
 
-    // 검색 필터 (이름, 주소, 설명)
+    // 검색 필터 (이름, 주소, 카테고리)
     if (search) {
       // SQL Injection 방지: 특수 문자 이스케이프
       const sanitizedSearch = search.replace(/[%_\\]/g, '\\$&');
-      query = query.or(`name.ilike.%${sanitizedSearch}%,address.ilike.%${sanitizedSearch}%,description.ilike.%${sanitizedSearch}%`);
+
+      // 1. 먼저 카테고리 이름으로 검색하여 해당 카테고리 ID 조회
+      const { data: matchingCategories } = await supabase
+        .from('categories')
+        .select('id')
+        .ilike('name', `%${sanitizedSearch}%`);
+
+      const categoryIds = matchingCategories?.map(c => c.id) || [];
+
+      // 2. 이름, 주소로 검색하거나 카테고리 ID가 일치하는 맛집 검색
+      if (categoryIds.length > 0) {
+        // 카테고리가 일치하는 경우 포함
+        query = query.or(`name.ilike.%${sanitizedSearch}%,address.ilike.%${sanitizedSearch}%,category_id.in.(${categoryIds.join(',')})`);
+      } else {
+        // 카테고리 일치 없으면 이름, 주소만 검색
+        query = query.or(`name.ilike.%${sanitizedSearch}%,address.ilike.%${sanitizedSearch}%`);
+      }
     }
 
     // 정렬

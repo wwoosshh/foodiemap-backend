@@ -3,7 +3,7 @@ const { body, query, validationResult } = require('express-validator');
 const Restaurant = require('../models/Restaurant');
 const authMiddleware = require('../middleware/auth');
 const supabase = require('../config/supabase');
-const { chosungIncludes, getChoseong } = require('es-hangul');
+const { getChoseong } = require('es-hangul');
 
 const router = express.Router();
 
@@ -11,6 +11,13 @@ const router = express.Router();
 const isChosungOnly = (str) => {
   const chosungRegex = /^[ㄱ-ㅎ\s]+$/;
   return chosungRegex.test(str);
+};
+
+// 초성 포함 검사 함수 (getChoseong 사용)
+const chosungIncludes = (text, chosungQuery) => {
+  if (!text || !chosungQuery) return false;
+  const textChosung = getChoseong(text);
+  return textChosung.includes(chosungQuery);
 };
 
 // 초성 검색 매칭 함수 (이름, 주소, 카테고리)

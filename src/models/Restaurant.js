@@ -248,6 +248,10 @@ class Restaurant {
 
       data.phone = data.restaurant_contacts?.phone;
       data.email = data.restaurant_contacts?.email;
+
+      // 불필요한 가격 정보 제거
+      delete data.avg_price_per_person;
+      delete data.price_range;
     }
 
     return data;
@@ -383,6 +387,10 @@ class Restaurant {
 
       // 태그 배열로 변환
       data.tags = data.restaurant_tags?.map(rt => rt.tags).filter(Boolean) || [];
+
+      // 불필요한 가격 정보 제거
+      delete data.avg_price_per_person;
+      delete data.price_range;
     }
 
     return data;

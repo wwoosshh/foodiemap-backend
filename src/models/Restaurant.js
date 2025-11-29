@@ -202,10 +202,9 @@ class Restaurant {
         ),
         restaurant_contacts (
           phone,
+          secondary_phone,
           email,
-          website_url,
-          instagram_url,
-          naver_place_url
+          fax
         ),
         restaurant_media (
           id,
@@ -275,11 +274,7 @@ class Restaurant {
           phone,
           secondary_phone,
           email,
-          website_url,
-          instagram_url,
-          facebook_url,
-          naver_place_url,
-          kakao_channel_url
+          fax
         ),
         restaurant_operations (
           business_hours,

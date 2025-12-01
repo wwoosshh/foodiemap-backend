@@ -210,7 +210,7 @@ router.get('/:id/complete', [
         .eq('restaurant_id', restaurantId)
         .order('display_order', { ascending: true }),
 
-      // 7. 맛집 태그
+      // 7. 맛집 태그 (카테고리 정보 포함)
       supabase
         .from('restaurant_tags')
         .select(`
@@ -218,8 +218,17 @@ router.get('/:id/complete', [
             id,
             name,
             category,
+            category_id,
             icon,
-            color
+            color,
+            tag_categories (
+              id,
+              name,
+              name_en,
+              slug,
+              icon,
+              color
+            )
           )
         `)
         .eq('restaurant_id', restaurantId),
@@ -302,11 +311,14 @@ router.get('/:id/complete', [
       menu: allPhotos.filter(p => p.category === 'menu')
     };
 
-    // 태그 데이터 변환
+    // 태그 데이터 변환 (카테고리 정보 포함)
     const transformedTags = (restaurantTagsResult.data || []).map(rt => ({
       id: rt.tags.id,
       name: rt.tags.name,
-      category: rt.tags.category,
+      category: rt.tags.tag_categories?.name || rt.tags.category,
+      category_slug: rt.tags.tag_categories?.slug,
+      category_icon: rt.tags.tag_categories?.icon,
+      category_color: rt.tags.tag_categories?.color,
       icon: rt.tags.icon,
       color: rt.tags.color
     }));

@@ -230,6 +230,7 @@ const eventRoutes = require('./routes/events');
 const preferencesRoutes = require('./routes/preferences');
 const sitemapRoutes = require('./routes/sitemap');
 const contactRoutes = require('./routes/contact');
+const collectionsRoutes = require('./routes/collections');
 
 // 크론잡 시작 (만료된 계정 자동 삭제)
 require('./jobs/cleanup');
@@ -254,6 +255,7 @@ app.use('/api/restaurant-details', restaurantDetailRoutes);
 app.use('/api/events', eventRoutes);
 app.use('/api/preferences', preferencesRoutes);
 app.use('/api/contact', contactRoutes);
+app.use('/api/collections', collectionsRoutes);
 app.use('/api', sitemapRoutes);
 
 // API 정보
@@ -271,7 +273,8 @@ app.get('/api', (req, res) => {
       home: '/api/home',
       restaurantDetails: '/api/restaurant-details',
       events: '/api/events',
-      preferences: '/api/preferences'
+      preferences: '/api/preferences',
+      collections: '/api/collections'
     }
   });
 });

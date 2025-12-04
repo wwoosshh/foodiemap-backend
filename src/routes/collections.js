@@ -467,7 +467,8 @@ router.put('/:id', [
   body('title').optional().trim().isLength({ min: 1, max: 100 }),
   body('description').optional().trim().isLength({ max: 500 }),
   body('visibility').optional().isIn(['public', 'private', 'followers_only']),
-  body('cover_image_url').optional()
+  body('cover_image_url').optional(),
+  body('restaurants').optional().isArray()
 ], async (req, res) => {
   try {
     const errors = validationResult(req);
@@ -477,7 +478,7 @@ router.put('/:id', [
 
     const { id } = req.params;
     const userId = req.user.id;
-    const { title, description, visibility, cover_image_url } = req.body;
+    const { title, description, visibility, cover_image_url, restaurants } = req.body;
 
     // 소유권 확인
     const { data: existing } = await supabase
@@ -505,6 +506,37 @@ router.put('/:id', [
       .eq('id', id);
 
     if (error) throw error;
+
+    // restaurants 배열이 전달된 경우 collection_items 업데이트
+    if (restaurants && Array.isArray(restaurants)) {
+      // 기존 아이템 삭제
+      await supabase
+        .from('collection_items')
+        .delete()
+        .eq('collection_id', id);
+
+      // 새 아이템 추가
+      if (restaurants.length > 0) {
+        const items = restaurants.map((restaurant, index) => ({
+          collection_id: id,
+          restaurant_id: restaurant.id,
+          note: restaurant.note || null,
+          display_order: index
+        }));
+
+        const { error: itemsError } = await supabase
+          .from('collection_items')
+          .insert(items);
+
+        if (itemsError) throw itemsError;
+      }
+
+      // item_count 업데이트
+      await supabase
+        .from('collections')
+        .update({ item_count: restaurants.length })
+        .eq('id', id);
+    }
 
     res.json({
       success: true,

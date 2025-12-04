@@ -382,7 +382,8 @@ router.post('/', [
   body('type').optional().isIn(['favorites', 'reviewed', 'wishlist', 'custom']),
   body('visibility').optional().isIn(['public', 'private', 'followers_only']),
   body('cover_image_url').optional().isURL(),
-  body('restaurant_ids').optional().isArray()
+  body('restaurant_ids').optional().isArray(),
+  body('restaurants').optional().isArray()
 ], async (req, res) => {
   try {
     const errors = validationResult(req);
@@ -397,7 +398,8 @@ router.post('/', [
       type = 'custom',
       visibility = 'public',
       cover_image_url,
-      restaurant_ids = []
+      restaurant_ids = [],
+      restaurants = []
     } = req.body;
 
     // 컬렉션 생성
@@ -416,8 +418,21 @@ router.post('/', [
 
     if (error) throw error;
 
-    // 맛집 추가
-    if (restaurant_ids.length > 0) {
+    // 맛집 추가 (새로운 형식: restaurants 배열 with note)
+    if (restaurants.length > 0) {
+      const items = restaurants.map((restaurant, index) => ({
+        collection_id: collection.id,
+        restaurant_id: restaurant.id,
+        note: restaurant.note || null,
+        display_order: index
+      }));
+
+      await supabase
+        .from('collection_items')
+        .insert(items);
+    }
+    // 하위 호환: 기존 restaurant_ids 형식 지원
+    else if (restaurant_ids.length > 0) {
       const items = restaurant_ids.map((restaurantId, index) => ({
         collection_id: collection.id,
         restaurant_id: restaurantId,

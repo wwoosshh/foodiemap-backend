@@ -110,7 +110,6 @@ router.get('/', [
       like_count: c.like_count,
       save_count: c.save_count,
       view_count: c.view_count,
-      comment_count: c.comment_count,
       is_featured: c.is_featured,
       created_at: c.created_at,
       user: {
@@ -331,7 +330,6 @@ router.get('/:id', [
         like_count: collection.like_count,
         save_count: collection.save_count,
         view_count: collection.view_count + 1,
-        comment_count: collection.comment_count,
         is_featured: collection.is_featured,
         created_at: collection.created_at,
         updated_at: collection.updated_at,
@@ -765,128 +763,6 @@ router.post('/:id/save', [
     res.status(500).json({
       success: false,
       message: '처리에 실패했습니다.'
-    });
-  }
-});
-
-// ============================================
-// 댓글 목록 조회
-// ============================================
-router.get('/:id/comments', [
-  param('id').isUUID(),
-  query('page').optional().isInt({ min: 1 }),
-  query('limit').optional().isInt({ min: 1, max: 50 })
-], async (req, res) => {
-  try {
-    const { id } = req.params;
-    const { page = 1, limit = 20 } = req.query;
-    const offset = (parseInt(page) - 1) * parseInt(limit);
-
-    const { data, error, count } = await supabase
-      .from('collection_comments')
-      .select(`
-        *,
-        users!user_id (
-          id,
-          name,
-          avatar_url
-        )
-      `, { count: 'exact' })
-      .eq('collection_id', id)
-      .eq('status', 'published')
-      .is('parent_comment_id', null)
-      .order('created_at', { ascending: false })
-      .range(offset, offset + parseInt(limit) - 1);
-
-    if (error) throw error;
-
-    res.json({
-      success: true,
-      data: {
-        comments: (data || []).map(c => ({
-          id: c.id,
-          content: c.content,
-          like_count: c.like_count,
-          created_at: c.created_at,
-          user: {
-            id: c.users?.id,
-            name: c.users?.name,
-            avatar_url: c.users?.avatar_url
-          }
-        })),
-        pagination: {
-          total: count,
-          page: parseInt(page),
-          limit: parseInt(limit)
-        }
-      }
-    });
-  } catch (error) {
-    console.error('댓글 조회 오류:', error);
-    res.status(500).json({
-      success: false,
-      message: '댓글을 불러오는데 실패했습니다.'
-    });
-  }
-});
-
-// ============================================
-// 댓글 작성
-// ============================================
-router.post('/:id/comments', [
-  authMiddleware.requireAuth,
-  param('id').isUUID(),
-  body('content').trim().isLength({ min: 1, max: 500 })
-], async (req, res) => {
-  try {
-    const errors = validationResult(req);
-    if (!errors.isEmpty()) {
-      return res.status(400).json({ success: false, errors: errors.array() });
-    }
-
-    const { id } = req.params;
-    const userId = req.user.id;
-    const { content, parent_comment_id } = req.body;
-
-    const { data, error } = await supabase
-      .from('collection_comments')
-      .insert([{
-        collection_id: id,
-        user_id: userId,
-        content,
-        parent_comment_id
-      }])
-      .select(`
-        *,
-        users!user_id (
-          id,
-          name,
-          avatar_url
-        )
-      `)
-      .single();
-
-    if (error) throw error;
-
-    res.status(201).json({
-      success: true,
-      message: '댓글이 작성되었습니다.',
-      data: {
-        id: data.id,
-        content: data.content,
-        created_at: data.created_at,
-        user: {
-          id: data.users?.id,
-          name: data.users?.name,
-          avatar_url: data.users?.avatar_url
-        }
-      }
-    });
-  } catch (error) {
-    console.error('댓글 작성 오류:', error);
-    res.status(500).json({
-      success: false,
-      message: '댓글 작성에 실패했습니다.'
     });
   }
 });

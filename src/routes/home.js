@@ -225,14 +225,22 @@ router.get('/data', async (req, res) => {
       console.error('통계 조회 실패:', statsResult.error);
     }
 
-    // 레스토랑 데이터 변환 함수 (이미지 추출)
+    // 레스토랑 데이터 변환 함수 (이미지 3개만 추출)
     const transformRestaurants = (restaurants) => {
       return (restaurants || []).map(restaurant => {
-        // 대표 이미지 추출
-        const representativeMedia = restaurant.restaurant_media?.find(m => m.is_representative);
-        const images = representativeMedia?.media_files?.file_url
-          ? [representativeMedia.media_files.file_url]
-          : [];
+        // display_order 순으로 정렬 (대표 이미지 먼저)
+        const sortedMedia = (restaurant.restaurant_media || [])
+          .sort((a, b) => {
+            if (a.is_representative && !b.is_representative) return -1;
+            if (!a.is_representative && b.is_representative) return 1;
+            return (a.display_order || 0) - (b.display_order || 0);
+          });
+
+        // 최대 3개 이미지만 추출
+        const images = sortedMedia
+          .slice(0, 3)
+          .map(m => m.media_files?.file_url)
+          .filter(Boolean);
 
         return {
           ...restaurant,
@@ -241,15 +249,21 @@ router.get('/data', async (req, res) => {
       });
     };
 
-    // 푸시 맛집 데이터 변환 함수
+    // 푸시 맛집 데이터 변환 함수 (이미지 3개만 추출)
     const transformPushedRestaurants = (pushedRestaurants) => {
       return (pushedRestaurants || []).map(pushed => {
-        // restaurant 객체에 이미지 추가
         if (pushed.restaurant) {
-          const representativeMedia = pushed.restaurant.restaurant_media?.find(m => m.is_representative);
-          const images = representativeMedia?.media_files?.file_url
-            ? [representativeMedia.media_files.file_url]
-            : [];
+          const sortedMedia = (pushed.restaurant.restaurant_media || [])
+            .sort((a, b) => {
+              if (a.is_representative && !b.is_representative) return -1;
+              if (!a.is_representative && b.is_representative) return 1;
+              return (a.display_order || 0) - (b.display_order || 0);
+            });
+
+          const images = sortedMedia
+            .slice(0, 3)
+            .map(m => m.media_files?.file_url)
+            .filter(Boolean);
 
           return {
             ...pushed,

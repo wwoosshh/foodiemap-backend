@@ -170,14 +170,20 @@ router.get('/multi-sort', [
       console.error('최신순 조회 실패:', byLatest.error);
     }
 
-    // 레스토랑 데이터 변환 함수
+    // 레스토랑 데이터 변환 함수 (이미지 3개만 추출)
     const transformRestaurants = (restaurants) => {
       return (restaurants || []).map(restaurant => {
-        // 대표 이미지 추출
-        const representativeMedia = restaurant.restaurant_media?.find(m => m.is_representative);
-        const images = representativeMedia?.media_files?.file_url
-          ? [representativeMedia.media_files.file_url]
-          : [];
+        const sortedMedia = (restaurant.restaurant_media || [])
+          .sort((a, b) => {
+            if (a.is_representative && !b.is_representative) return -1;
+            if (!a.is_representative && b.is_representative) return 1;
+            return (a.display_order || 0) - (b.display_order || 0);
+          });
+
+        const images = sortedMedia
+          .slice(0, 3)
+          .map(m => m.media_files?.file_url)
+          .filter(Boolean);
 
         return {
           ...restaurant,
@@ -342,12 +348,19 @@ router.get('/', [
         throw allError;
       }
 
-      // 레스토랑 데이터 변환 (대표 이미지 추출)
+      // 레스토랑 데이터 변환 (이미지 3개만 추출)
       const transformedAll = (allRestaurants || []).map(restaurant => {
-        const representativeMedia = restaurant.restaurant_media?.find(m => m.is_representative);
-        const images = representativeMedia?.media_files?.file_url
-          ? [representativeMedia.media_files.file_url]
-          : [];
+        const sortedMedia = (restaurant.restaurant_media || [])
+          .sort((a, b) => {
+            if (a.is_representative && !b.is_representative) return -1;
+            if (!a.is_representative && b.is_representative) return 1;
+            return (a.display_order || 0) - (b.display_order || 0);
+          });
+
+        const images = sortedMedia
+          .slice(0, 3)
+          .map(m => m.media_files?.file_url)
+          .filter(Boolean);
 
         return {
           ...restaurant,
@@ -399,12 +412,19 @@ router.get('/', [
 
     const totalPages = count ? Math.ceil(count / limit) : 0;
 
-    // 레스토랑 데이터 변환 (대표 이미지 추출)
+    // 레스토랑 데이터 변환 (이미지 3개만 추출)
     const transformedRestaurants = (restaurants || []).map(restaurant => {
-      const representativeMedia = restaurant.restaurant_media?.find(m => m.is_representative);
-      const images = representativeMedia?.media_files?.file_url
-        ? [representativeMedia.media_files.file_url]
-        : [];
+      const sortedMedia = (restaurant.restaurant_media || [])
+        .sort((a, b) => {
+          if (a.is_representative && !b.is_representative) return -1;
+          if (!a.is_representative && b.is_representative) return 1;
+          return (a.display_order || 0) - (b.display_order || 0);
+        });
+
+      const images = sortedMedia
+        .slice(0, 3)
+        .map(m => m.media_files?.file_url)
+        .filter(Boolean);
 
       return {
         ...restaurant,

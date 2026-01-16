@@ -23,28 +23,31 @@ router.get('/:id/complete', [
 
     const restaurantId = req.params.id;
     const userId = req.user?.id; // 인증된 사용자가 있는 경우
+    const skipViewCount = req.query.skip_view_count === 'true';
 
-    // 조회수 간단하게 1 증가
-    (async () => {
-      try {
-        // 현재 조회수 가져오기
-        const { data: currentData } = await supabase
-          .from('restaurants')
-          .select('view_count')
-          .eq('id', restaurantId)
-          .single();
-
-        if (currentData) {
-          // 조회수 +1 업데이트
-          await supabase
+    // 조회수 간단하게 1 증가 (skip_view_count가 true가 아닌 경우에만)
+    if (!skipViewCount) {
+      (async () => {
+        try {
+          // 현재 조회수 가져오기
+          const { data: currentData } = await supabase
             .from('restaurants')
-            .update({ view_count: (currentData.view_count || 0) + 1 })
-            .eq('id', restaurantId);
+            .select('view_count')
+            .eq('id', restaurantId)
+            .single();
+
+          if (currentData) {
+            // 조회수 +1 업데이트
+            await supabase
+              .from('restaurants')
+              .update({ view_count: (currentData.view_count || 0) + 1 })
+              .eq('id', restaurantId);
+          }
+        } catch (err) {
+          // 조회수 증가 실패는 무시
         }
-      } catch (err) {
-        // 조회수 증가 실패는 무시
-      }
-    })();
+      })();
+    }
 
     // 병렬로 모든 관련 데이터 가져오기
     const [

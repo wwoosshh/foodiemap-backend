@@ -67,7 +67,8 @@ const matchesNormalSearch = (restaurant, searchQuery) => {
 // 다중 정렬 맛집 목록 조회 (한 번의 요청으로 모든 정렬 방식 반환)
 router.get('/multi-sort', [
   query('limit').optional().isInt({ min: 1, max: 100 }),
-  query('category_id').optional().isUUID()
+  query('category_id').optional().isUUID(),
+  query('category_ids').optional().isString() // 쉼표로 구분된 여러 카테고리 ID
 ], async (req, res) => {
   try {
     const errors = validationResult(req);
@@ -81,6 +82,10 @@ router.get('/multi-sort', [
 
     const limit = parseInt(req.query.limit) || 10;
     const categoryId = req.query.category_id || null;
+    // 여러 카테고리 ID 처리 (쉼표로 구분)
+    const categoryIds = req.query.category_ids
+      ? req.query.category_ids.split(',').map(id => id.trim()).filter(id => id)
+      : [];
 
     // 기본 쿼리 설정
     const baseSelect = `
@@ -115,40 +120,52 @@ router.get('/multi-sort', [
       )
     `;
 
+    // 카테고리 필터 적용 함수
+    const applyCategoryFilter = (query) => {
+      if (categoryIds.length > 0) {
+        // 여러 카테고리 ID인 경우 OR 조건 (in 사용)
+        return query.in('category_id', categoryIds);
+      } else if (categoryId) {
+        // 단일 카테고리 ID인 경우
+        return query.eq('category_id', categoryId);
+      }
+      return query;
+    };
+
     // 병렬로 모든 정렬 방식의 데이터 가져오기
     const [byRating, byReviewCount, byViewCount, byFavoriteCount, byLatest] = await Promise.all([
       // 평점 높은 순
       (async () => {
         let query = supabase.from('restaurants').select(baseSelect);
-        if (categoryId) query = query.eq('category_id', categoryId);
+        query = applyCategoryFilter(query);
         return await query.order('rating', { ascending: false }).limit(limit);
       })(),
 
       // 리뷰 많은 순
       (async () => {
         let query = supabase.from('restaurants').select(baseSelect);
-        if (categoryId) query = query.eq('category_id', categoryId);
+        query = applyCategoryFilter(query);
         return await query.order('review_count', { ascending: false }).limit(limit);
       })(),
 
       // 조회수 많은 순
       (async () => {
         let query = supabase.from('restaurants').select(baseSelect);
-        if (categoryId) query = query.eq('category_id', categoryId);
+        query = applyCategoryFilter(query);
         return await query.order('view_count', { ascending: false }).limit(limit);
       })(),
 
       // 좋아요 많은 순
       (async () => {
         let query = supabase.from('restaurants').select(baseSelect);
-        if (categoryId) query = query.eq('category_id', categoryId);
+        query = applyCategoryFilter(query);
         return await query.order('favorite_count', { ascending: false }).limit(limit);
       })(),
 
       // 최신순
       (async () => {
         let query = supabase.from('restaurants').select(baseSelect);
-        if (categoryId) query = query.eq('category_id', categoryId);
+        query = applyCategoryFilter(query);
         return await query.order('created_at', { ascending: false }).limit(limit);
       })()
     ]);
@@ -221,6 +238,7 @@ router.get('/', [
   query('page').optional().isInt({ min: 1 }),
   query('limit').optional().isInt({ min: 1, max: 100 }),
   query('category_id').optional().isUUID(),
+  query('category_ids').optional().isString(), // 쉼표로 구분된 여러 카테고리 ID
   query('search').optional().trim(),
   query('sort').optional().isIn([
     'view_count_desc',
@@ -243,6 +261,10 @@ router.get('/', [
     const page = parseInt(req.query.page) || 1;
     const limit = parseInt(req.query.limit) || 20;
     const categoryId = req.query.category_id || null;
+    // 여러 카테고리 ID 처리 (쉼표로 구분)
+    const categoryIds = req.query.category_ids
+      ? req.query.category_ids.split(',').map(id => id.trim()).filter(id => id)
+      : [];
     const search = req.query.search || null;
     const sort = req.query.sort || 'created_at_desc';
     const offset = (page - 1) * limit;
@@ -282,8 +304,10 @@ router.get('/', [
         )
       `, { count: 'exact' });
 
-    // 카테고리 필터
-    if (categoryId) {
+    // 카테고리 필터 (여러 카테고리 OR 조건 지원)
+    if (categoryIds.length > 0) {
+      query = query.in('category_id', categoryIds);
+    } else if (categoryId) {
       query = query.eq('category_id', categoryId);
     }
 
